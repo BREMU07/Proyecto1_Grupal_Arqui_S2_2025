@@ -1,75 +1,69 @@
 # -------------------------
-# main.py
+# main.py (solo pruebas del file_loader)
 # -------------------------
-from assembler import Assembler
-from simple_pipeline import Simple_Pipeline
+from file_loader import FileLoader
+import os
 
-# Programa de prueba
-asm_code = """
-add x1, x2, x3   
-sub x4, x5, x6    
-mul x7, x8, x9    
-and x10, x11, x12 
-or x13, x14, x15  
-lw x16, 100(x17)  
-"""
+# Clase de memoria simulada para pruebas
+class DummyMemory:
+    def __init__(self, size=1024 * 64):
+        self.mem = bytearray(size)
 
-# -------------------------
-# Ensamblar
-# -------------------------
-assembler = Assembler()
-program = assembler.assemble(asm_code)
+    def write_block(self, start_addr, data):
+        """Simula escritura de un bloque de datos en memoria"""
+        end = start_addr + len(data)
+        if end > len(self.mem):
+            raise ValueError("Bloque excede el tamaño de la memoria simulada")
+        self.mem[start_addr:end] = data
 
-# Mostrar las instrucciones generadas
-print("Instrucciones generadas:")
-for i, instr in enumerate(program):
-    print(f"Instr {i}: 0x{instr:016X}")
-print()
+    def __getitem__(self, addr):
+        return self.mem[addr]
 
-# -------------------------
-# Inicializar pipeline
-# -------------------------
-pipeline = Simple_Pipeline()
-
-# Inicializar registros con valores de prueba
-pipeline.registers[2] = 10
-pipeline.registers[3] = 5
-pipeline.registers[5] = 20
-pipeline.registers[6] = 8
-pipeline.registers[8] = 2
-pipeline.registers[9] = 3
-pipeline.registers[11] = 12
-pipeline.registers[12] = 5
-pipeline.registers[14] = 1
-pipeline.registers[15] = 7
-pipeline.registers[17] = 200
-
-# Inicializar memoria para LW (8 bytes)
-pipeline.memory[300:308] = (1234).to_bytes(8, 'little')
-
-# Cargar programa en memoria
-pipeline.load_program(program)
-
-# -------------------------
-# Ejecutar pipeline
-# -------------------------
-print("Ejecutando pipeline...\n")
-cycle_count = 0
-while pipeline.is_pipeline_active():
-    pipeline.step()
-    cycle_count += 1
-
-print(f"Pipeline completado en {cycle_count} ciclos")
-
-# -------------------------
-# Mostrar resultados finales
-# -------------------------
-print("\n=== Resultados finales de registros ===")
-print(f"x1  = {pipeline.registers[1]:>8} (add: 10 + 5)")      # 10 + 5 = 15
-print(f"x4  = {pipeline.registers[4]:>8} (sub: 20 - 8)")      # 20 - 8 = 12
-print(f"x7  = {pipeline.registers[7]:>8} (mul: 2 * 3)")       # 2 * 3 = 6
-print(f"x10 = {pipeline.registers[10]:>8} (and: 12 & 5)")     # 12 & 5 = 4
-print(f"x13 = {pipeline.registers[13]:>8} (or: 1 | 7)")       # 1 | 7 = 7
-print(f"x16 = {pipeline.registers[16]:>8} (lw: MEM[300])")    # MEM[300] = 1234
+    def __setitem__(self, addr, val):
+        self.mem[addr] = val
 
 
+def main():
+    print("=== Prueba del módulo FileLoader ===")
+
+    # Crear memoria simulada y loader
+    memory = DummyMemory()
+    loader = FileLoader(memory)
+
+    # Pedir archivo al usuario
+    file_path = input("Ingrese la ruta del archivo a cargar: ").strip()
+
+    if not os.path.exists(file_path):
+        print("❌ Archivo no encontrado.")
+        return
+
+    try:
+        # Cargar archivo en memoria
+        result = loader.load_file(file_path)
+
+        # Detectar tipo de retorno
+        if isinstance(result, tuple):
+            start_addr, num_blocks, file_size = result
+        elif isinstance(result, dict):
+            start_addr = result.get("start_addr")
+            num_blocks = result.get("num_blocks")
+            file_size = result.get("file_size")
+        else:
+            raise TypeError("El método load_file() devolvió un tipo inesperado.")
+
+        # Mostrar resultados
+        print("\n✅ Archivo cargado correctamente:")
+        print(f"  Dirección inicial: 0x{start_addr:08X}")
+        print(f"  Bloques cargados  : {num_blocks}")
+        print(f"  Tamaño del archivo: {file_size} bytes")
+
+        # Mostrar primeros bytes de la memoria
+        print("\nPrimeros 64 bytes en memoria:")
+        print(memory.mem[start_addr:start_addr + 64].hex())
+
+    except Exception as e:
+        print(f"⚠️ Error al cargar el archivo: {e}")
+
+
+if __name__ == "__main__":
+    main()

@@ -107,28 +107,29 @@ class Assembler:
 
         return program
 
-# -------------------------
-# Programa de prueba
-# -------------------------
-asm_code = """
-add x1, x2, x3
-add x1, x2, x4
-sub x4, x5, x6
-mul x7, x8, x9
-and x10, x11, x12
-or x13, x14, x15
-lw x16, 100(x17)
-"""
+if __name__ == "__main__":
+    # -------------------------
+    # Programa de prueba
+    # -------------------------
+    asm_code = """
+    add x1, x2, x3
+    add x1, x2, x4
+    sub x4, x5, x6
+    mul x7, x8, x9
+    and x10, x11, x12
+    or x13, x14, x15
+    lw x16, 100(x17)
+    """
 
-# -------------------------
-# Ensamblar
-# -------------------------
-assembler = Assembler()
-program = assembler.assemble(asm_code)
+    # -------------------------
+    # Ensamblar
+    # -------------------------
+    assembler = Assembler()
+    program = assembler.assemble(asm_code)
 
-# -------------------------
-# Mostrar instrucciones
-# -------------------------
-for i, instr in enumerate(program):
-    print(f"Instr {i}: {instr:064b}")  # binario 64 bits
-    print(f"Instr {i} hex: {instr:016X}")  # hexadecimal
+    # -------------------------
+    # Mostrar instrucciones
+    # -------------------------
+    for i, instr in enumerate(program):
+        print(f"Instr {i}: {instr:064b}")  # binario 64 bits
+        print(f"Instr {i} hex: {instr:016X}")  # hexadecimal
