@@ -15,11 +15,12 @@ class PipelinedRegister:
         self.stage = ""
 
 class Simple_Pipeline:
-    def __init__(self):
+    def __init__(self, trace=False):
         self.memory = bytearray(1024)  # 1KB
         self.registers = [0] * 32
         self.pc = 0
         self.cycle = 0
+        self.trace = trace
 
         # Pipeline registers
         self.IF_ID = PipelinedRegister()
@@ -63,6 +64,9 @@ class Simple_Pipeline:
         # Inmediato para I-type (lw) - Nuevo opcode personalizado
         if self.ID_EX.opcode == 0xA1:  # lw con nuevo opcode
             self.ID_EX.imm = (instr >> 28) & 0xFFFFFFFFF
+        # Inmediatos para nuevas instrucciones I-type: rol(0xAA), muli(0xAB), modi(0xAC)
+        elif self.ID_EX.opcode in (0xAA, 0xAB, 0xAC):
+            self.ID_EX.imm = (instr >> 28) & 0xFFFFFFFFF
 
         self.ID_EX.valid = True
         self.ID_EX.stage = "ID"
@@ -80,19 +84,51 @@ class Simple_Pipeline:
         # R-type con nuevos opcodes personalizados
         if op == 0xC3:  # add/sub/mul con nuevo opcode
             if self.ID_EX.funct3 == 0x1 and self.ID_EX.funct7 == 0x10:   # add
-                alu_result = rs1_val + rs2_val
+                alu_result = (rs1_val + rs2_val) & 0xFFFFFFFFFFFFFFFF
             elif self.ID_EX.funct3 == 0x2 and self.ID_EX.funct7 == 0x20: # sub
-                alu_result = rs1_val - rs2_val
+                alu_result = (rs1_val - rs2_val) & 0xFFFFFFFFFFFFFFFF
             elif self.ID_EX.funct3 == 0x3 and self.ID_EX.funct7 == 0x30: # mul
-                alu_result = rs1_val * rs2_val
+                alu_result = (rs1_val * rs2_val) & 0xFFFFFFFFFFFFFFFF
         elif op == 0xF6:  # and/or con nuevo opcode
             if self.ID_EX.funct3 == 0x1 and self.ID_EX.funct7 == 0x40: # and
                 alu_result = rs1_val & rs2_val
             elif self.ID_EX.funct3 == 0x2 and self.ID_EX.funct7 == 0x50: # or
                 alu_result = rs1_val | rs2_val
+        elif op == 0xF7:  # xor/not custom opcode
+            if self.ID_EX.funct3 == 0x3 and self.ID_EX.funct7 == 0x60:  # xor
+                alu_result = rs1_val ^ rs2_val
+            elif self.ID_EX.funct3 == 0x4 and self.ID_EX.funct7 == 0x70:  # not (unary on rs1)
+                alu_result = (~rs1_val) & 0xFFFFFFFFFFFFFFFF
+        # I-type custom toy instructions
+        elif op == 0xAA:  # rol rd, rs1, imm
+            # rotate left 64-bit
+            r = self.ID_EX.imm & 0x3F
+            val = (rs1_val & 0xFFFFFFFFFFFFFFFF)
+            alu_result = ((val << r) | (val >> (64 - r))) & 0xFFFFFFFFFFFFFFFF
+        elif op == 0xAB:  # muli rd, rs1, imm
+            imm = self.ID_EX.imm & 0xFFFFFFFFFFFFFFFF
+            alu_result = (rs1_val * imm) & 0xFFFFFFFFFFFFFFFF
+        elif op == 0xAC:  # modi rd, rs1, imm
+            imm = self.ID_EX.imm & 0xFFFFFFFFFFFFFFFF
+            if imm == 0:
+                alu_result = 0
+            else:
+                alu_result = rs1_val % imm
         # I-type lw con nuevo opcode
         elif op == 0xA1:  # lw
             alu_result = rs1_val + self.ID_EX.imm
+
+        # ensure 64-bit wraparound for any result
+        alu_result &= 0xFFFFFFFFFFFFFFFF
+
+        if self.trace:
+            try:
+                f7 = self.ID_EX.funct7
+                f3 = self.ID_EX.funct3
+            except Exception:
+                f7 = 0
+                f3 = 0
+            print(f"EX: pc={self.ID_EX.pc} opcode=0x{op:02X} f7=0x{f7:02X} f3=0x{f3:01X} rd=x{self.ID_EX.rd} rs1=x{self.ID_EX.rs1} rs2=x{self.ID_EX.rs2} imm=0x{self.ID_EX.imm:X} rs1_val=0x{rs1_val:016X} rs2_val=0x{rs2_val:016X} -> alu=0x{alu_result:016X}")
 
         self.EX_MEM.alu_result = alu_result
         self.EX_MEM.rd = self.ID_EX.rd

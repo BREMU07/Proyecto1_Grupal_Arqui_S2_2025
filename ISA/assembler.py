@@ -1,3 +1,4 @@
+
 class Assembler:
     def __init__(self):
         # Opcodes personalizados completamente diferentes a RISC-V
@@ -11,7 +12,12 @@ class Assembler:
             'beq': 0xE5,     # Branch if Equal
             'and': 0xF6,     # Bitwise AND
             'or': 0xF6,      # Bitwise OR (mismo opcode que and, diferenciado por funct3)
-            'ebreak': 0x88   # Environment Break
+            'xor': 0xF7,     # Bitwise XOR (new)
+            'not': 0xF7,     # Bitwise NOT (new, same opcode as xor, differentiated by funct3)
+            'ebreak': 0x88,   # Environment Break
+            'rol': 0xAA,     # Rotate left immediate
+            'muli': 0xAB,    # Multiply by immediate (for mul mix step)
+            'modi': 0xAC     # Modular reduce immediate (for modulo prime)
         }
         
         # Códigos funct3 personalizados
@@ -25,7 +31,12 @@ class Assembler:
             'beq': 0x4,      # Branch Equal function
             'and': 0x1,      # AND function
             'or': 0x2,       # OR function
-            'ebreak': 0x7    # System break function
+            'xor': 0x3,
+            'not': 0x4,
+            'ebreak': 0x7,   # System break function
+            'rol': 0x3,
+            'muli': 0x4,
+            'modi': 0x5
         }
         
         # Códigos funct7 personalizados
@@ -34,7 +45,9 @@ class Assembler:
             'sub': 0x20,     # Subtraction extended function
             'mul': 0x30,     # Multiplication extended function
             'and': 0x40,     # AND extended function
-            'or': 0x50      # OR extended function
+            'or': 0x50,     # OR extended function
+            'xor': 0x60,    # XOR extended function
+            'not': 0x70     # NOT extended function
         }
 
     def parse_register(self, reg_str):
@@ -78,12 +91,20 @@ class Assembler:
             inst = parts[0].lower()
 
             # R-type instructions
-            if inst in ['add', 'sub', 'mul', 'and', 'or']:
-                if len(parts) < 4:
-                    raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
-                rd = self.parse_register(parts[1])
-                rs1 = self.parse_register(parts[2])
-                rs2 = self.parse_register(parts[3])
+            if inst in ['add', 'sub', 'mul', 'and', 'or', 'xor', 'not']:
+                # allow `not rd, rs1` (unary) as well as 3-operand R-type
+                if inst == 'not':
+                    if len(parts) < 3:
+                        raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
+                    rd = self.parse_register(parts[1])
+                    rs1 = self.parse_register(parts[2])
+                    rs2 = 0
+                else:
+                    if len(parts) < 4:
+                        raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
+                    rd = self.parse_register(parts[1])
+                    rs1 = self.parse_register(parts[2])
+                    rs2 = self.parse_register(parts[3])
                 f7 = self.funct7.get(inst, 0)
                 f3 = self.funct3.get(inst, 0)
                 opcode = self.opcodes.get(inst)
@@ -97,8 +118,27 @@ class Assembler:
                     raise ValueError(f"[line {lineno}] Invalid lw syntax: {line}")
                 offset_str, rs1_str = offset_rs.split('(')
                 rs1 = self.parse_register(rs1_str[:-1])
-                offset = int(offset_str)
+                try:
+                    offset = int(offset_str, 0)
+                except ValueError:
+                    raise ValueError(f"[line {lineno}] Invalid lw offset: {offset_str}")
                 instruction = self.encode_i64(offset, rs1, self.funct3['lw'], rd, self.opcodes['lw'])
+
+            # ToyMDMA immediate-type helpers: rol rd, rs, imm  ; muli rd, rs, imm ; modi rd, rs, imm
+            elif inst in ['rol', 'muli', 'modi']:
+                # syntax: rol rd, rs1, imm
+                if len(parts) < 4:
+                    raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
+                rd = self.parse_register(parts[1])
+                rs1 = self.parse_register(parts[2])
+                # accept decimal or hex immediates (e.g. 123 or 0x7B)
+                try:
+                    imm = int(parts[3], 0)
+                except ValueError:
+                    raise ValueError(f"[line {lineno}] Invalid immediate value: {parts[3]}")
+                f3 = self.funct3.get(inst, 0)
+                opcode = self.opcodes.get(inst)
+                instruction = self.encode_i64(imm, rs1, f3, rd, opcode)
 
             else:
                 raise ValueError(f"[line {lineno}] Unknown instruction: {inst}")
@@ -107,28 +147,3 @@ class Assembler:
 
         return program
 
-# -------------------------
-# Programa de prueba
-# -------------------------
-asm_code = """
-add x1, x2, x3
-add x1, x2, x4
-sub x4, x5, x6
-mul x7, x8, x9
-and x10, x11, x12
-or x13, x14, x15
-lw x16, 100(x17)
-"""
-
-# -------------------------
-# Ensamblar
-# -------------------------
-assembler = Assembler()
-program = assembler.assemble(asm_code)
-
-# -------------------------
-# Mostrar instrucciones
-# -------------------------
-for i, instr in enumerate(program):
-    print(f"Instr {i}: {instr:064b}")  # binario 64 bits
-    print(f"Instr {i} hex: {instr:016X}")  # hexadecimal
