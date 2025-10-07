@@ -60,8 +60,8 @@ class Simple_Pipeline:
         self.ID_EX.funct3 = (instr >> 44) & 0x7
         self.ID_EX.funct7 = (instr >> 57) & 0x7F
 
-        # Inmediato para I-type (lw)
-        if self.ID_EX.opcode == 0x03:
+        # Inmediato para I-type (lw) - Nuevo opcode personalizado
+        if self.ID_EX.opcode == 0xA1:  # lw con nuevo opcode
             self.ID_EX.imm = (instr >> 28) & 0xFFFFFFFFF
 
         self.ID_EX.valid = True
@@ -77,21 +77,21 @@ class Simple_Pipeline:
         rs2_val = self.registers[self.ID_EX.rs2]
 
         alu_result = 0
-        # R-type
-        if op == 0x33:
-            if self.ID_EX.funct3 == 0x0:
-                if self.ID_EX.funct7 == 0x00:   # add
-                    alu_result = rs1_val + rs2_val
-                elif self.ID_EX.funct7 == 0x20: # sub
-                    alu_result = rs1_val - rs2_val
-                elif self.ID_EX.funct7 == 0x01: # mul
-                    alu_result = rs1_val * rs2_val
-            elif self.ID_EX.funct3 == 0x7 and self.ID_EX.funct7 == 0x00: # and
+        # R-type con nuevos opcodes personalizados
+        if op == 0xC3:  # add/sub/mul con nuevo opcode
+            if self.ID_EX.funct3 == 0x1 and self.ID_EX.funct7 == 0x10:   # add
+                alu_result = rs1_val + rs2_val
+            elif self.ID_EX.funct3 == 0x2 and self.ID_EX.funct7 == 0x20: # sub
+                alu_result = rs1_val - rs2_val
+            elif self.ID_EX.funct3 == 0x3 and self.ID_EX.funct7 == 0x30: # mul
+                alu_result = rs1_val * rs2_val
+        elif op == 0xF6:  # and/or con nuevo opcode
+            if self.ID_EX.funct3 == 0x1 and self.ID_EX.funct7 == 0x40: # and
                 alu_result = rs1_val & rs2_val
-            elif self.ID_EX.funct3 == 0x6 and self.ID_EX.funct7 == 0x00: # or
+            elif self.ID_EX.funct3 == 0x2 and self.ID_EX.funct7 == 0x50: # or
                 alu_result = rs1_val | rs2_val
-        # I-type lw
-        elif op == 0x03:
+        # I-type lw con nuevo opcode
+        elif op == 0xA1:  # lw
             alu_result = rs1_val + self.ID_EX.imm
 
         self.EX_MEM.alu_result = alu_result
@@ -107,10 +107,10 @@ class Simple_Pipeline:
             return
 
         op = self.EX_MEM.opcode
-        if op == 0x03:  # lw
+        if op == 0xA1:  # lw con nuevo opcode personalizado
             addr = self.EX_MEM.alu_result
             self.MEM_WB.alu_result = int.from_bytes(self.memory[addr:addr+8], 'little')
-        else:  # R-type
+        else:  # R-type (opcodes 0xC3 y 0xF6)
             self.MEM_WB.alu_result = self.EX_MEM.alu_result
 
         self.MEM_WB.rd = self.EX_MEM.rd

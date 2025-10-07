@@ -1,35 +1,40 @@
 class Assembler:
     def __init__(self):
+        # Opcodes personalizados completamente diferentes a RISC-V
         self.opcodes = {
-            'lw': 0x03,
-            'sw': 0x23,
-            'add': 0x33,
-            'sub': 0x33,
-            'mul': 0x33,
-            'jal': 0x6F,
-            'beq': 0x63,
-            'and': 0x33,
-            'or': 0x33,
-            'ebreak': 0x73
+            'lw': 0xA1,      # Load Word
+            'sw': 0xB2,      # Store Word  
+            'add': 0xC3,     # Addition
+            'sub': 0xC3,     # Subtraction (mismo opcode que add, diferenciado por funct7)
+            'mul': 0xC3,     # Multiplication (mismo opcode que add, diferenciado por funct7)
+            'jal': 0xD4,     # Jump and Link
+            'beq': 0xE5,     # Branch if Equal
+            'and': 0xF6,     # Bitwise AND
+            'or': 0xF6,      # Bitwise OR (mismo opcode que and, diferenciado por funct3)
+            'ebreak': 0x88   # Environment Break
         }
+        
+        # Códigos funct3 personalizados
         self.funct3 = {
-            'lw': 0x2,
-            'sw': 0x2,
-            'add': 0x0,
-            'sub': 0x0,
-            'mul': 0x0,
-            'jal': 0x0,
-            'beq': 0x0,
-            'and': 0x7,
-            'or': 0x6,
-            'ebreak': 0x0
+            'lw': 0x5,       # Load Word function
+            'sw': 0x6,       # Store Word function
+            'add': 0x1,      # Addition function
+            'sub': 0x2,      # Subtraction function
+            'mul': 0x3,      # Multiplication function
+            'jal': 0x0,      # Jump function
+            'beq': 0x4,      # Branch Equal function
+            'and': 0x1,      # AND function
+            'or': 0x2,       # OR function
+            'ebreak': 0x7    # System break function
         }
+        
+        # Códigos funct7 personalizados
         self.funct7 = {
-            'add': 0x00,
-            'sub': 0x20,
-            'mul': 0x01,
-            'and': 0x00,
-            'or': 0x00
+            'add': 0x10,     # Addition extended function
+            'sub': 0x20,     # Subtraction extended function
+            'mul': 0x30,     # Multiplication extended function
+            'and': 0x40,     # AND extended function
+            'or': 0x50      # OR extended function
         }
 
     def parse_register(self, reg_str):
