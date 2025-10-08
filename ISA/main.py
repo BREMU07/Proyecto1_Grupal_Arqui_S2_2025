@@ -1,69 +1,71 @@
-# -------------------------
-# main.py (solo pruebas del file_loader)
-# -------------------------
-from file_loader import FileLoader
+# main.py -- pruebas del FileLoader 
 import os
-
-# Clase de memoria simulada para pruebas
-class DummyMemory:
-    def __init__(self, size=1024 * 64):
-        self.mem = bytearray(size)
-
-    def write_block(self, start_addr, data):
-        """Simula escritura de un bloque de datos en memoria"""
-        end = start_addr + len(data)
-        if end > len(self.mem):
-            raise ValueError("Bloque excede el tamaño de la memoria simulada")
-        self.mem[start_addr:end] = data
-
-    def __getitem__(self, addr):
-        return self.mem[addr]
-
-    def __setitem__(self, addr, val):
-        self.mem[addr] = val
-
+from file_loader import FileLoader
 
 def main():
-    print("=== Prueba del módulo FileLoader ===")
+    print("=== Prueba del módulo FileLoader ===\n")
 
-    # Crear memoria simulada y loader
-    memory = DummyMemory()
-    loader = FileLoader(memory)
+    # Crear memoria simulada como bytearray (2 MB por defecto)
+    MEMORY_SIZE = 2 * 1024 * 1024  # 2 MiB
+    memory = bytearray(MEMORY_SIZE)
+
+    # Crear FileLoader pasando la referencia de memoria
+    # Ajustamos base_address a 0x1000 (4096) para no pisar el posible código en 0
+    loader = FileLoader(memory, base_address=0x1000)
 
     # Pedir archivo al usuario
     file_path = input("Ingrese la ruta del archivo a cargar: ").strip()
 
+    if not file_path:
+        print("No se ingresó ruta. Saliendo.")
+        return
+
     if not os.path.exists(file_path):
-        print("❌ Archivo no encontrado.")
+        print("❌ Archivo no encontrado:", file_path)
         return
 
     try:
-        # Cargar archivo en memoria
-        result = loader.load_file(file_path)
-
-        # Detectar tipo de retorno
-        if isinstance(result, tuple):
-            start_addr, num_blocks, file_size = result
-        elif isinstance(result, dict):
-            start_addr = result.get("start_addr")
-            num_blocks = result.get("num_blocks")
-            file_size = result.get("file_size")
+        # Lógica adaptable: llamamos al método que exista en FileLoader
+        if hasattr(loader, 'load_file_in_blocks'):
+            # preferimos bloques (útil para hashing), usamos block_size=8 (64 bits)
+            result = loader.load_file_in_blocks(file_path, block_size=8)
+            # load_file_in_blocks -> (start_addr, num_blocks, file_size)
+            if isinstance(result, tuple) and len(result) == 3:
+                start_addr, num_blocks, file_size = result
+            else:
+                raise RuntimeError("Formato de retorno inesperado desde load_file_in_blocks()")
+        elif hasattr(loader, 'load_file_to_memory'):
+            # carga completa (sin bloques)
+            result = loader.load_file_to_memory(file_path)
+            # load_file_to_memory -> (start_addr, size_bytes)
+            if isinstance(result, tuple) and len(result) == 2:
+                start_addr, file_size = result
+                num_blocks = (file_size + 7) // 8  # contar bloques de 8 bytes como referencia
+            else:
+                raise RuntimeError("Formato de retorno inesperado desde load_file_to_memory()")
         else:
-            raise TypeError("El método load_file() devolvió un tipo inesperado.")
+            raise AttributeError("FileLoader no provee métodos de carga conocidos (load_file_in_blocks / load_file_to_memory)")
 
         # Mostrar resultados
         print("\n✅ Archivo cargado correctamente:")
-        print(f"  Dirección inicial: 0x{start_addr:08X}")
-        print(f"  Bloques cargados  : {num_blocks}")
-        print(f"  Tamaño del archivo: {file_size} bytes")
+        print(f"  Ruta               : {file_path}")
+        print(f"  Dirección inicial  : 0x{start_addr:08X}")
+        print(f"  Tamaño (bytes)     : {file_size}")
+        print(f"  Bloques (8 bytes)  : {num_blocks}")
 
-        # Mostrar primeros bytes de la memoria
-        print("\nPrimeros 64 bytes en memoria:")
-        print(memory.mem[start_addr:start_addr + 64].hex())
+        # Mostrar primeros 64 bytes en memoria (si están dentro del rango)
+        end_preview = start_addr + 64
+        if end_preview <= len(memory):
+            preview = memory[start_addr:end_preview]
+            print("\nPrimeros 64 bytes en memoria (hex):")
+            print(preview.hex())
+        else:
+            print("\nNo hay suficiente memoria para mostrar 64 bytes de preview.")
 
     except Exception as e:
-        print(f"⚠️ Error al cargar el archivo: {e}")
+        print(f"\n⚠️ Error al cargar el archivo: {e}")
 
 
 if __name__ == "__main__":
     main()
+
