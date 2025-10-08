@@ -15,12 +15,13 @@ class Assembler:
             'xor': 0xF7,     # Bitwise XOR (new)
             'not': 0xF7,     # Bitwise NOT (new, same opcode as xor, differentiated by funct3)
             'ebreak': 0x88,   # Environment Break
+            'addi': 0xA9,    # Add immediate
             'rol': 0xAA,     # Rotate left immediate
             'muli': 0xAB,    # Multiply by immediate (for mul mix step)
             'modi': 0xAC     # Modular reduce immediate (for modulo prime)
         }
         
-        # Códigos funct3 personalizados
+        # Codigos funct3 personalizados
         self.funct3 = {
             'lw': 0x5,       # Load Word function
             'sw': 0x6,       # Store Word function
@@ -34,12 +35,13 @@ class Assembler:
             'xor': 0x3,
             'not': 0x4,
             'ebreak': 0x7,   # System break function
+            'addi': 0x1,     # Add immediate function
             'rol': 0x3,
             'muli': 0x4,
             'modi': 0x5
         }
         
-        # Códigos funct7 personalizados
+        # Codigos funct7 personalizados
         self.funct7 = {
             'add': 0x10,     # Addition extended function
             'sub': 0x20,     # Subtraction extended function
@@ -58,25 +60,29 @@ class Assembler:
             raise ValueError(f"Register out of range (0-31): {reg_str}")
         return val
 
-    # Encoding helpers para 64 bits
+    # Encoding helpers para 64 bits - Formato unificado
+    # [63-56: opcode] [55-51: rd] [50-46: rs1] [45-41: rs2] [40-38: funct3] [37-31: funct7] [30-0: imm/unused]
+    
     def encode_r64(self, funct7, rs2, rs1, funct3, rd, opcode):
+        """Codifica instruccion R-type con formato unificado"""
         funct7 &= 0x7F
         rs2 &= 0x1F
         rs1 &= 0x1F
         funct3 &= 0x7
         rd &= 0x1F
-        opcode &= 0xFF  
-        # 32 bits superiores como 0 por ahora
-        instr = (funct7 << 57) | (rs2 << 52) | (rs1 << 47) | (funct3 << 44) | (rd << 39) | (opcode << 31)
+        opcode &= 0xFF
+        instr = (opcode << 56) | (rd << 51) | (rs1 << 46) | (rs2 << 41) | (funct3 << 38) | (funct7 << 31)
         return instr
 
     def encode_i64(self, imm, rs1, funct3, rd, opcode):
-        imm &= 0xFFFFFFFFF  # 36 bits para inmediato
+        """Codifica instruccion I-type con formato unificado (rs2=0 para I-type)"""
+        imm &= 0x7FFFFFFF      # 31 bits para inmediato
         rs1 &= 0x1F
-        rd &= 0x1F
         funct3 &= 0x7
+        rd &= 0x1F
         opcode &= 0xFF
-        instr = (imm << 28) | (rs1 << 23) | (funct3 << 20) | (rd << 15) | (opcode << 7)
+        # rs2 = 0 para instrucciones I-type, funct7 = 0 para I-type
+        instr = (opcode << 56) | (rd << 51) | (rs1 << 46) | (funct3 << 38) | imm
         return instr
 
     # Main assemble
@@ -124,9 +130,9 @@ class Assembler:
                     raise ValueError(f"[line {lineno}] Invalid lw offset: {offset_str}")
                 instruction = self.encode_i64(offset, rs1, self.funct3['lw'], rd, self.opcodes['lw'])
 
-            # ToyMDMA immediate-type helpers: rol rd, rs, imm  ; muli rd, rs, imm ; modi rd, rs, imm
-            elif inst in ['rol', 'muli', 'modi']:
-                # syntax: rol rd, rs1, imm
+            # I-type immediate instructions: addi, rol, muli, modi
+            elif inst in ['addi', 'rol', 'muli', 'modi']:
+                # syntax: addi rd, rs1, imm
                 if len(parts) < 4:
                     raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
                 rd = self.parse_register(parts[1])
@@ -139,6 +145,36 @@ class Assembler:
                 f3 = self.funct3.get(inst, 0)
                 opcode = self.opcodes.get(inst)
                 instruction = self.encode_i64(imm, rs1, f3, rd, opcode)
+
+            # J-type instruction: jal rd, imm
+            elif inst == 'jal':
+                if len(parts) < 3:
+                    raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
+                rd = self.parse_register(parts[1])
+                try:
+                    imm = int(parts[2], 0)
+                except ValueError:
+                    raise ValueError(f"[line {lineno}] Invalid immediate value: {parts[2]}")
+                f3 = self.funct3.get(inst, 0)
+                opcode = self.opcodes.get(inst)
+                # Use I-type encoding for JAL (immediate in lower 31 bits)
+                instruction = self.encode_i64(imm, 0, f3, rd, opcode)
+
+            # B-type instruction: beq rs1, rs2, imm
+            elif inst == 'beq':
+                if len(parts) < 4:
+                    raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
+                rs1 = self.parse_register(parts[1])
+                rs2 = self.parse_register(parts[2])
+                try:
+                    imm = int(parts[3], 0)
+                except ValueError:
+                    raise ValueError(f"[line {lineno}] Invalid immediate value: {parts[3]}")
+                f3 = self.funct3.get(inst, 0)
+                opcode = self.opcodes.get(inst)
+                # Use R-type encoding with immediate in funct7 field and lower bits
+                # Store imm in bits [30-0], use rd=0 for branch instructions
+                instruction = self.encode_r64(0, rs2, rs1, f3, 0, opcode) | (imm & 0x7FFFFFFF)
 
             else:
                 raise ValueError(f"[line {lineno}] Unknown instruction: {inst}")

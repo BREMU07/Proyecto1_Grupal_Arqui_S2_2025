@@ -27,21 +27,45 @@ class Simple_Pipeline:
         self.ID_EX = PipelinedRegister()
         self.EX_MEM = PipelinedRegister()
         self.MEM_WB = PipelinedRegister()
+        
+        # ToyMDMA constants
+        self.GOLDEN = 0x9e3779b97f4a7c15
+        self.PRIME = 0xFFFFFFFB
 
     def load_program(self, program):
         for i, instr in enumerate(program):
             self.memory[i*8:(i+1)*8] = instr.to_bytes(8, 'little')
         self.pc = 0
+        # Marcar el final del programa con una instruccion especial (NOP)
+        end_addr = len(program) * 8
+        if end_addr < len(self.memory):
+            self.memory[end_addr:end_addr+8] = (0).to_bytes(8, 'little')
 
     def is_pipeline_active(self):
-        return self.IF_ID.valid or self.ID_EX.valid or self.EX_MEM.valid or self.MEM_WB.valid or self.pc < len(self.memory)
+        # Verificar si hay actividad en el pipeline y que el PC no haya llegado al final
+        has_valid_stages = self.IF_ID.valid or self.ID_EX.valid or self.EX_MEM.valid or self.MEM_WB.valid
+        pc_in_bounds = self.pc < len(self.memory)
+        
+        # Verificar si encontramos una instruccion NOP (0x0) que indica fin del programa
+        if pc_in_bounds and self.pc < len(self.memory) - 8:
+            current_instr = int.from_bytes(self.memory[self.pc:self.pc+8], 'little')
+            if current_instr == 0:  # NOP indica fin del programa
+                return has_valid_stages  # Solo continuar si hay etapas validas
+        
+        return has_valid_stages or pc_in_bounds
 
     # -------------------------
     # Pipeline stages
     # -------------------------
     def IF_stage(self):
-        if self.pc < len(self.memory):
-            self.IF_ID.instruction = int.from_bytes(self.memory[self.pc:self.pc+8], 'little')
+        if self.pc < len(self.memory) - 8:  # Asegurar que no leamos fuera de memoria
+            current_instr = int.from_bytes(self.memory[self.pc:self.pc+8], 'little')
+            
+            # Si encontramos una instruccion NOP (0x0), detener el fetch
+            if current_instr == 0:
+                return
+                
+            self.IF_ID.instruction = current_instr
             self.IF_ID.pc = self.pc
             self.IF_ID.valid = True
             self.IF_ID.stage = "IF"
@@ -54,19 +78,16 @@ class Simple_Pipeline:
         instr = self.IF_ID.instruction
         self.ID_EX.instruction = instr
         self.ID_EX.pc = self.IF_ID.pc
-        self.ID_EX.opcode = (instr >> 31) & 0xFF
-        self.ID_EX.rd = (instr >> 39) & 0x1F
-        self.ID_EX.rs1 = (instr >> 47) & 0x1F
-        self.ID_EX.rs2 = (instr >> 52) & 0x1F
-        self.ID_EX.funct3 = (instr >> 44) & 0x7
-        self.ID_EX.funct7 = (instr >> 57) & 0x7F
-
-        # Inmediato para I-type (lw) - Nuevo opcode personalizado
-        if self.ID_EX.opcode == 0xA1:  # lw con nuevo opcode
-            self.ID_EX.imm = (instr >> 28) & 0xFFFFFFFFF
-        # Inmediatos para nuevas instrucciones I-type: rol(0xAA), muli(0xAB), modi(0xAC)
-        elif self.ID_EX.opcode in (0xAA, 0xAB, 0xAC):
-            self.ID_EX.imm = (instr >> 28) & 0xFFFFFFFFF
+        
+        # Nuevo formato unificado de 64 bits:
+        # [63-56: opcode] [55-51: rd] [50-46: rs1] [45-41: rs2] [40-38: funct3] [37-31: funct7] [30-0: imm/unused]
+        self.ID_EX.opcode = (instr >> 56) & 0xFF
+        self.ID_EX.rd = (instr >> 51) & 0x1F
+        self.ID_EX.rs1 = (instr >> 46) & 0x1F
+        self.ID_EX.rs2 = (instr >> 41) & 0x1F
+        self.ID_EX.funct3 = (instr >> 38) & 0x7
+        self.ID_EX.funct7 = (instr >> 31) & 0x7F
+        self.ID_EX.imm = instr & 0x7FFFFFFF  # 31 bits para inmediato
 
         self.ID_EX.valid = True
         self.ID_EX.stage = "ID"
@@ -117,6 +138,29 @@ class Simple_Pipeline:
         # I-type lw con nuevo opcode
         elif op == 0xA1:  # lw
             alu_result = rs1_val + self.ID_EX.imm
+        # I-type addi (add immediate)
+        elif op == 0xA9:  # addi rd, rs1, imm
+            alu_result = (rs1_val + self.ID_EX.imm) & 0xFFFFFFFFFFFFFFFF
+        # J-type jal con nuevo opcode
+        elif op == 0xD4:  # jal rd, imm
+            # Store return address (PC + 4) in rd, jump to PC + imm
+            alu_result = self.ID_EX.pc + 8  # Return address (next instruction)
+            # Jump to target address
+            jump_target = self.ID_EX.pc + self.ID_EX.imm
+            self.pc = jump_target
+            # Invalidate pipeline stages after this instruction
+            self.IF_ID.valid = False
+        # B-type beq con nuevo opcode  
+        elif op == 0xE5:  # beq rs1, rs2, imm
+            # Branch if rs1 == rs2
+            if rs1_val == rs2_val:
+                # Take branch
+                branch_target = self.ID_EX.pc + self.ID_EX.imm
+                self.pc = branch_target
+                # Invalidate pipeline stages after this instruction
+                self.IF_ID.valid = False
+            # ALU result not used for branch instructions
+            alu_result = 0
 
         # ensure 64-bit wraparound for any result
         alu_result &= 0xFFFFFFFFFFFFFFFF
@@ -174,3 +218,7 @@ class Simple_Pipeline:
         self.EX_stage()
         self.ID_stage()
         self.IF_stage()
+
+        self.cycle += 1
+    
+
