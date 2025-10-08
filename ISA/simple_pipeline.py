@@ -1,4 +1,5 @@
-# simple_pipeline.py
+from vault import Vault
+
 class PipelinedRegister:
     def __init__(self):
         self.instruction = 0
@@ -26,6 +27,9 @@ class Simple_Pipeline:
         self.ID_EX = PipelinedRegister()
         self.EX_MEM = PipelinedRegister()
         self.MEM_WB = PipelinedRegister()
+
+        # Bóveda segura
+        self.vault = Vault()
 
     def load_program(self, program):
         for i, instr in enumerate(program):
@@ -61,7 +65,7 @@ class Simple_Pipeline:
         self.ID_EX.funct7 = (instr >> 57) & 0x7F
 
         # Inmediato para I-type (lw) - Nuevo opcode personalizado
-        if self.ID_EX.opcode == 0xA1:  # lw con nuevo opcode
+        if self.ID_EX.opcode in [0xA1, 0x92]:  # lw o vsign con nuevo opcode
             self.ID_EX.imm = (instr >> 28) & 0xFFFFFFFFF
 
         self.ID_EX.valid = True
@@ -93,10 +97,20 @@ class Simple_Pipeline:
         # I-type lw con nuevo opcode
         elif op == 0xA1:  # lw
             alu_result = rs1_val + self.ID_EX.imm
+        # Vault write (vwr)
+        elif op == 0x90:
+            alu_result = rs1_val
+        # Vault init (vinit)
+        elif op == 0x91:
+            alu_result = rs1_val
+        # Vault sign (vsign)
+        elif op == 0x92:
+            alu_result = self.ID_EX.imm  # dirección base
 
         self.EX_MEM.alu_result = alu_result
         self.EX_MEM.rd = self.ID_EX.rd
         self.EX_MEM.opcode = self.ID_EX.opcode
+        self.EX_MEM.rs1 = self.ID_EX.rs1
         self.EX_MEM.rs2 = self.ID_EX.rs2
         self.EX_MEM.valid = True
         self.EX_MEM.stage = "EX"
@@ -110,6 +124,30 @@ class Simple_Pipeline:
         if op == 0xA1:  # lw con nuevo opcode personalizado
             addr = self.EX_MEM.alu_result
             self.MEM_WB.alu_result = int.from_bytes(self.memory[addr:addr+8], 'little')
+
+        # Instrucciones de bóveda
+        elif op == 0x90:  # vwr xSrc, idx
+            self.vault.write_key(self.EX_MEM.rs2, self.EX_MEM.alu_result)
+            self.MEM_WB.alu_result = 0
+        elif op == 0x91:  # vinit xSrc, idx
+            self.vault.write_init(self.EX_MEM.rs2, self.EX_MEM.alu_result)
+            self.MEM_WB.alu_result = 0
+        elif op == 0x92:  # vsign idx, addr
+            addr = self.EX_MEM.alu_result
+            key_idx = self.EX_MEM.rs1
+            # Leer 4 bloques de 8 bytes
+            blocks = [
+                int.from_bytes(self.memory[addr + i*8 : addr + (i+1)*8], 'little')
+                for i in range(4)
+            ]
+            # Calcular firma con la bóveda
+            S = self.vault.sign_block(key_idx, blocks)
+            # Escribir firma después del mensaje
+            for i, val in enumerate(S):
+                pos = addr + 4*8 + i*8
+                self.memory[pos:pos+8] = val.to_bytes(8, 'little')
+            self.MEM_WB.alu_result = 1  # éxito
+
         else:  # R-type (opcodes 0xC3 y 0xF6)
             self.MEM_WB.alu_result = self.EX_MEM.alu_result
 
