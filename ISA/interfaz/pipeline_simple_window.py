@@ -257,7 +257,10 @@ class Simple_Pipeline_Window:
 
     def load_sign_and_verify_file(self):
         """Cargar archivo, calcular hash, firmar, guardar y verificar"""
-        file_path = filedialog.askopenfilename(title="Select File to Hash & Sign", filetypes=[("All Files", "*.*")])
+        file_path = filedialog.askopenfilename(
+            title="Select File to Hash & Sign",
+            filetypes=[("All Files", "*.*")]
+        )
         if not file_path:
             return
 
@@ -276,30 +279,63 @@ class Simple_Pipeline_Window:
             if len(blocks[-1]) < 8:
                 blocks[-1] = blocks[-1].ljust(8, b'\x00')
 
+            # Procesar cada bloque
             for i, block in enumerate(blocks):
                 data_block = int.from_bytes(block, 'little')
                 A, B, C, D, steps = self.hash_block_with_pipeline(A, B, C, D, data_block)
                 total_steps += steps
-                self.output_text.insert(tk.END, f"Bloque {i+1}/{len(blocks)}: A=0x{A:016X}, B=0x{B:016X}, C=0x{C:016X}, D=0x{D:016X}, Steps={steps}\n")
+                self.output_text.insert(
+                    tk.END,
+                    f"Bloque {i+1}/{len(blocks)}: A=0x{A:016X}, B=0x{B:016X}, "
+                    f"C=0x{C:016X}, D=0x{D:016X}, Steps={steps}\n"
+                )
                 self.output_text.see(tk.END)
 
             final_hash = (A ^ B ^ C ^ D) & 0xFFFFFFFFFFFFFFFF
             self.output_text.insert(tk.END, f"\nHash final: 0x{final_hash:016X}\n")
 
             # Crear archivo firmado
-            signature = processor.create_signed_file(file_path, signed_file)
-            self.output_text.insert(tk.END, f"Archivo firmado: {signed_file}\n")
-            self.output_text.insert(tk.END, f"Firma: S1=0x{signature['signature'][0]:016X}, S2=0x{signature['signature'][1]:016X}, S3=0x{signature['signature'][2]:016X}, S4=0x{signature['signature'][3]:016X}\n")
+            signature_info = processor.create_signed_file(file_path, signed_file)
+            signature = signature_info['signature']
+            private_key = signature_info.get('private_key', processor.private_key)
 
-            # Verificar firma
-            verify = processor.verify_signed_file(signed_file)
-            self.output_text.insert(tk.END, f"Verificación de firma: {'VÁLIDA' if verify['valid'] else 'INVÁLIDA'}\n")
+            self.output_text.insert(
+                tk.END,
+                f"Archivo firmado: {signed_file}\n"
+                f"Firma: S1=0x{signature[0]:016X}, S2=0x{signature[1]:016X}, "
+                f"S3=0x{signature[2]:016X}, S4=0x{signature[3]:016X}\n"
+            )
 
-            # Estadísticas
+            
+            result = processor.verify_signed_file(signed_file)
+            is_valid = result["valid"]
+            self.output_text.insert(
+                tk.END,
+                f"Verificación de firma: {'VÁLIDA' if is_valid else 'INVÁLIDA'}\n"
+            )
+            self.output_text.insert(
+                tk.END,
+                f"Detalles de firma: {result['signature']}\n"
+            )
+            self.output_text.insert(
+                tk.END,
+                f"Hash componentes: {result['hash_components']}\n"
+            )
+
+
+
+
+            # Estadísticas de tamaño
             original_size = os.path.getsize(file_path)
             signed_size = os.path.getsize(signed_file)
             overhead = signed_size - original_size
-            self.output_text.insert(tk.END, f"\nTamaño original: {original_size} bytes\nArchivo firmado: {signed_size} bytes\nOverhead de firma: {overhead} bytes\nClave usada: 0x{processor.private_key:016X}\n")
+            self.output_text.insert(
+                tk.END,
+                f"\nTamaño original: {original_size} bytes\n"
+                f"Tamaño archivo firmado: {signed_size} bytes\n"
+                f"Overhead de firma: {overhead} bytes\n"
+                f"Clave usada: 0x{private_key:016X}\n"
+            )
             self.output_text.see(tk.END)
 
         except Exception as e:
