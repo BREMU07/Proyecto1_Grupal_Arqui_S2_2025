@@ -4,114 +4,85 @@ from assembler import Assembler
 from simple_pipeline import Simple_Pipeline
 import time
 
+
 class ISAPipelineHashProcessor:
     def __init__(self):
         self.assembler = Assembler()
-        # Clave privada para firma (por ahora hardcodeada)
         self.private_key = 0x123456789ABCDEF0
-    
+        self.pipeline = Simple_Pipeline(trace=False)
+        self.program_loaded = False
+
+    # --- ARCHIVOS ---
     def load_file(self, file_path):
-        """Cargar archivo como bytes"""
         with open(file_path, 'rb') as f:
             return f.read()
-    
-    def sign_hash(self, A, B, C, D, key=None):
-        """
-        Firmar el hash usando XOR con la clave privada
-        S = (A XOR K, B XOR K, C XOR K, D XOR K)
-        """
-        if key is None:
-            key = self.private_key
-        
-        signature = (
-            A ^ key,
-            B ^ key,
-            C ^ key,
-            D ^ key
-        )
-        
-        return signature
-    
-    def verify_signature(self, signature, A, B, C, D, key=None):
-        """
-        Verificar la firma aplicando XOR nuevamente para recuperar el hash original
-        """
-        if key is None:
-            key = self.private_key
-        
-        # Recuperar hash original: Hash = Signature XOR K
-        recovered_A = signature[0] ^ key
-        recovered_B = signature[1] ^ key  
-        recovered_C = signature[2] ^ key
-        recovered_D = signature[3] ^ key
-        
-        # Verificar que coincida con el hash calculado
-        return (recovered_A == A and recovered_B == B and 
-                recovered_C == C and recovered_D == D)
-    
-    def create_signed_file(self, original_file, signed_file, key=None):
-        """
-        Crear archivo firmado que contiene el documento original + firma
-        """
-        # Calcular hash del documento original
-        A, B, C, D = self.calculate_hash_components(original_file)
-        
-        # Firmar el hash
-        signature = self.sign_hash(A, B, C, D, key)
-        
-        # Leer contenido original
-        original_data = self.load_file(original_file)
-        
-        # Crear archivo firmado: [contenido original][firma de 32 bytes]
-        with open(signed_file, 'wb') as f:
-            f.write(original_data)  # Escribir documento original
-            
-            # Escribir firma (4 valores de 64 bits = 32 bytes)
-            for sig_component in signature:
-                f.write(sig_component.to_bytes(8, 'little'))
-        
-        print(f"Archivo firmado creado: {signed_file}")
-        print(f"   Hash original: A=0x{A:016X}, B=0x{B:016X}, C=0x{C:016X}, D=0x{D:016X}")
-        print(f"   Firma: S1=0x{signature[0]:016X}, S2=0x{signature[1]:016X}, S3=0x{signature[2]:016X}, S4=0x{signature[3]:016X}")
-        
-        return signature
-    
-    def verify_signed_file(self, signed_file, key=None):
-        """
-        Verificar un archivo firmado
-        """
-        with open(signed_file, 'rb') as f:
-            data = f.read()
-        
-        # Los ultimos 32 bytes son la firma (4 x 8 bytes)
-        if len(data) < 32:
-            raise ValueError("Archivo demasiado pequeno para contener firma")
-        
-        document_data = data[:-32]  # Documento sin firma
-        signature_data = data[-32:]  # Ultimos 32 bytes son la firma
-        
-        # Extraer componentes de la firma
-        signature = []
-        for i in range(4):
-            sig_bytes = signature_data[i*8:(i+1)*8]
-            sig_component = int.from_bytes(sig_bytes, 'little')
-            signature.append(sig_component)
-        signature = tuple(signature)
-        
-        # Recalcular hash del documento
-        A, B, C, D = self.calculate_hash_from_data(document_data)
-        
-        # Verificar firma
-        is_valid = self.verify_signature(signature, A, B, C, D, key)
-        
-        print(f"   Verificacion de archivo firmado:")
-        print(f"   Documento: {len(document_data)} bytes")
-        print(f"   Hash recalculado: A=0x{A:016X}, B=0x{B:016X}, C=0x{C:016X}, D=0x{D:016X}")
-        print(f"   Firma leida: S1=0x{signature[0]:016X}, S2=0x{signature[1]:016X}, S3=0x{signature[2]:016X}, S4=0x{signature[3]:016X}")
-        print(f"   Verificacion: {'VALIDA' if is_valid else 'INVALIDA'}")
-        
-        return is_valid
-    
+
+    # --- HASH ---
+    def calculate_hash_components(self, file_path):
+        """Calcular hash por bloques y devolver resultados intermedios"""
+        data = self.load_file(file_path)
+        return self.calculate_hash_from_data(data)
+
+    def calculate_hash_from_data(self, data):
+        blocks = [data[i:i+8] for i in range(0, len(data), 8)]
+        if len(blocks[-1]) < 8:
+            blocks[-1] = blocks[-1].ljust(8, b'\x00')
+
+        A = 0x0123456789ABCDEF
+        B = 0xFEDCBA9876543210
+        C = 0x1111111111111111
+        D = 0x2222222222222222
+
+        block_results = []
+
+        for i, block in enumerate(blocks):
+            data_block = int.from_bytes(block, 'little')
+            A, B, C, D, steps = self.hash_block_with_isa(A, B, C, D, data_block)
+            block_results.append({
+                "block_index": i,
+                "data_block": data_block,
+                "A": A,
+                "B": B,
+                "C": C,
+                "D": D,
+                "steps": steps
+            })
+
+        final_hash = A ^ B ^ C ^ D
+
+        return {
+            "final_hash": final_hash,
+            "A": A, "B": B, "C": C, "D": D,
+            "blocks": block_results
+        }
+
+    def hash_block_with_isa(self, A, B, C, D, data_block):
+        if not self.program_loaded:
+            program = self.assembler.assemble(self.create_toymdata_program())
+            self.pipeline.load_program(program)
+            self.program_loaded = True
+
+        self.pipeline.registers[1] = data_block
+        self.pipeline.registers[2] = A
+        self.pipeline.registers[3] = B
+        self.pipeline.registers[4] = C
+        self.pipeline.registers[5] = D
+
+        steps = 0
+        max_steps = 50
+        while self.pipeline.is_pipeline_active() and steps < max_steps:
+            self.pipeline.step()
+            steps += 1
+
+        if steps >= max_steps:
+            raise RuntimeError("Pipeline excedió 50 pasos")
+
+        return (self.pipeline.registers[2] & 0xFFFFFFFFFFFFFFFF,
+                self.pipeline.registers[3] & 0xFFFFFFFFFFFFFFFF,
+                self.pipeline.registers[4] & 0xFFFFFFFFFFFFFFFF,
+                self.pipeline.registers[5] & 0xFFFFFFFFFFFFFFFF,
+                steps)
+
     def create_toymdata_program(self):
         """
         Crear programa ToyMDMA completo usando instrucciones del ISA
@@ -165,154 +136,67 @@ class ISAPipelineHashProcessor:
         """
         return program
     
-    def hash_block_with_isa(self, A, B, C, D, data_block):
-        """
-        Hashear un bloque usando el pipeline ISA con condicionales
-        """
-        try:
-            # Compilar programa ToyMDMA
-            instructions = self.assembler.assemble(self.create_toymdata_program())
-            
-            # Crear pipeline y cargar programa
-            pipeline = Simple_Pipeline(trace=False)
-            pipeline.load_program(instructions)
-            
-            # Inicializar registros con valores de entrada
-            pipeline.registers[1] = data_block  # x1 = data_block
-            pipeline.registers[2] = A           # x2 = A
-            pipeline.registers[3] = B           # x3 = B  
-            pipeline.registers[4] = C           # x4 = C
-            pipeline.registers[5] = D           # x5 = D
-            
-            # Ejecutar pipeline
-            steps = 0
-            max_steps = 50
-            
-            while pipeline.is_pipeline_active() and steps < max_steps:
-                pipeline.step()
-                steps += 1
-            
-            if steps >= max_steps:
-                raise RuntimeError(f"Pipeline excedio {max_steps} pasos")
-            
-            # Extraer resultados
-            new_A = pipeline.registers[2] & 0xFFFFFFFFFFFFFFFF
-            new_B = pipeline.registers[3] & 0xFFFFFFFFFFFFFFFF
-            new_C = pipeline.registers[4] & 0xFFFFFFFFFFFFFFFF
-            new_D = pipeline.registers[5] & 0xFFFFFFFFFFFFFFFF
-            
-            return new_A, new_B, new_C, new_D, steps
-            
-        except Exception as e:
-            raise RuntimeError(f"Error en pipeline ISA: {e}")
-    
-    def toy_mdma_hash_isa(self, file_path):
-        """
-        Calcular hash ToyMDMA completo usando pipeline ISA
-        """
-        print(f"Hash ToyMDMA con Pipeline ISA")
-        print("-" * 50)
-        
-        # Cargar archivo
-        print(f"Cargando archivo: {file_path}")
-        data = self.load_file(file_path)
-        
-        if not data:
-            raise ValueError("No se pudo cargar el archivo")
-        
-        print(f"Tamano del archivo: {len(data)} bytes")
-        
-        # Procesar en bloques de 8 bytes
-        blocks = [data[i:i+8] for i in range(0, len(data), 8)]
-        
-        # Padding del ultimo bloque si es necesario
-        if len(blocks[-1]) < 8:
-            blocks[-1] = blocks[-1].ljust(8, b'\x00')
-        
-        print(f"Total de bloques a procesar: {len(blocks)}")
-        
-        # Inicializar variables de hash
-        A = 0x0123456789ABCDEF
-        B = 0xFEDCBA9876543210  
-        C = 0x1111111111111111
-        D = 0x2222222222222222
-        
-        total_steps = 0
-        start_time = time.time()
-        
-        # Procesar cada bloque
-        for i, block in enumerate(blocks):
-            # Convertir bloque a entero de 64 bits
-            data_block = int.from_bytes(block, 'little')
-            
-            # Mostrar progreso cada 100 bloques
-            if i % 100 == 0:
-                print(f"Procesando bloque {i+1}/{len(blocks)}")
-                print(f"   Datos: 0x{data_block:016X}")
-                print(f"   Hash actual: A=0x{A:016X}, B=0x{B:016X}, C=0x{C:016X}, D=0x{D:016X}")
-            
-            # Procesar bloque con pipeline ISA
-            A, B, C, D, steps = self.hash_block_with_isa(A, B, C, D, data_block)
-            total_steps += steps
-        
-        end_time = time.time()
-        
-        # Mostrar resultados finales
-        print(f"\nHash final del archivo:")
-        print(f"   A = 0x{A:016X}")
-        print(f"   B = 0x{B:016X}")
-        print(f"   C = 0x{C:016X}")
-        print(f"   D = 0x{D:016X}")
-        
-        # Combinar hash final (ejemplo simple)
-        final_hash = (A ^ B ^ C ^ D) & 0xFFFFFFFFFFFFFFFF
-        print(f"   Hash combinado = 0x{final_hash:016X}")
-        
-        print(f"Tiempo: {end_time - start_time:.4f} segundos")
-        print(f"Total de pasos de pipeline: {total_steps}")
-        print(f"Promedio de pasos por bloque: {total_steps/len(blocks):.1f}")
-        print(f"Hash: 0x{final_hash:016X}")
-        
-        return final_hash
-    
-    def calculate_hash_components(self, file_path):
-        """
-        Calcular componentes individuales del hash (A, B, C, D) sin combinar
-        """
-        print(f"Calculando componentes de hash para: {file_path}")
-        
-        # Cargar archivo
-        data = self.load_file(file_path)
-        
-        return self.calculate_hash_from_data(data)
-    
-    def calculate_hash_from_data(self, data):
-        """
-        Calcular hash ToyMDMA de datos en memoria, devolviendo componentes separados
-        """
-        # Procesar en bloques de 8 bytes
-        blocks = [data[i:i+8] for i in range(0, len(data), 8)]
-        
-        # Padding del ultimo bloque si es necesario
-        if len(blocks[-1]) < 8:
-            blocks[-1] = blocks[-1].ljust(8, b'\x00')
-        
-        # Inicializar variables de hash
-        A = 0x0123456789ABCDEF
-        B = 0xFEDCBA9876543210  
-        C = 0x1111111111111111
-        D = 0x2222222222222222
-        
-        # Procesar cada bloque
-        for block in blocks:
-            # Convertir bloque a entero de 64 bits
-            data_block = int.from_bytes(block, 'little')
-            
-            # Procesar bloque con pipeline ISA
-            A, B, C, D, _ = self.hash_block_with_isa(A, B, C, D, data_block)
-        
-        return A, B, C, D
+    # --- FIRMA ---
+    def sign_hash(self, A, B, C, D, key=None):
+        if key is None:
+            key = self.private_key
+        return (A ^ key, B ^ key, C ^ key, D ^ key)
 
+    def verify_signature(self, signature, A, B, C, D, key=None):
+        if key is None:
+            key = self.private_key
+        return (signature[0] ^ key == A and
+                signature[1] ^ key == B and
+                signature[2] ^ key == C and
+                signature[3] ^ key == D)
+
+    # --- CREAR ARCHIVO FIRMADO ---
+    def create_signed_file(self, original_file, signed_file, key=None):
+        hash_info = self.calculate_hash_components(original_file)
+        signature = self.sign_hash(hash_info["A"], hash_info["B"], hash_info["C"], hash_info["D"], key)
+        original_data = self.load_file(original_file)
+
+        with open(signed_file, 'wb') as f:
+            f.write(original_data)
+            for s in signature:
+                f.write(s.to_bytes(8, 'little'))
+
+        return {
+            "signed_file": signed_file,
+            "signature": signature,
+            "hash_components": {
+                "A": hash_info["A"],
+                "B": hash_info["B"],
+                "C": hash_info["C"],
+                "D": hash_info["D"]
+            },
+            "file_size": len(original_data)
+        }
+
+    # --- VERIFICAR ARCHIVO FIRMADO ---
+    def verify_signed_file(self, signed_file, key=None):
+        data = self.load_file(signed_file)
+        if len(data) < 32:
+            raise ValueError("Archivo demasiado pequeño para contener firma")
+
+        document_data = data[:-32]
+        signature_bytes = data[-32:]
+        signature = tuple(int.from_bytes(signature_bytes[i*8:(i+1)*8], 'little') for i in range(4))
+        hash_info = self.calculate_hash_from_data(document_data)
+        valid = self.verify_signature(signature, hash_info[0], hash_info[1], hash_info[2], hash_info[3], key)
+
+        return {
+            "valid": valid,
+            "signature": signature,
+            "hash_components": {
+                "A": hash_info[0],
+                "B": hash_info[1],
+                "C": hash_info[2],
+                "D": hash_info[3]
+            },
+            "document_size": len(document_data)
+        }
+    
 def main():
     """
     Demostracion completa: Hash ToyMDMA + Firma Digital
