@@ -35,6 +35,9 @@ class Simple_Pipeline:
 
         # Bóveda segura
         self.vault = Vault()
+        # Estado de la bóveda (Vault)
+        self.vault_keys = [0] * 4
+        self.vault_inits = [0] * 4
 
     def load_program(self, program):
         for i, instr in enumerate(program):
@@ -166,6 +169,24 @@ class Simple_Pipeline:
             # ALU result not used for branch instructions
             alu_result = 0
 
+        # Instrucciones especiales de bóveda (Vault)
+        elif op == 0x90:  # vwr rd, imm  -> escribe llave privada
+            index = self.ID_EX.rd & 0x3     # índice de 0–3
+            value = self.ID_EX.imm & 0xFFFFFFFFFFFFFFFF
+            self.vault.write_key(index, value)
+            alu_result = 0  # sin retorno
+
+        elif op == 0x91:  # vinit rd, imm -> inicializa valor de hash
+            index = self.ID_EX.rd & 0x3
+            value = self.ID_EX.imm & 0xFFFFFFFFFFFFFFFF
+            self.vault.write_init(index, value)
+            alu_result = 0
+
+        elif op == 0x92:  # vsign rd, rs1, rs2
+            # Debug: show value of address register before signature
+            print(f"[DEBUG EX_stage vsign] rs2 (x{self.ID_EX.rs2}) value: 0x{self.registers[self.ID_EX.rs2]:X}")
+            alu_result = self.registers[self.ID_EX.rs2]
+
         # ensure 64-bit wraparound for any result
         alu_result &= 0xFFFFFFFFFFFFFFFF
 
@@ -183,6 +204,7 @@ class Simple_Pipeline:
         self.EX_MEM.opcode = self.ID_EX.opcode
         self.EX_MEM.rs1 = self.ID_EX.rs1
         self.EX_MEM.rs2 = self.ID_EX.rs2
+        self.EX_MEM.imm = self.ID_EX.imm
         self.EX_MEM.valid = True
         self.EX_MEM.stage = "EX"
         self.ID_EX.valid = False
@@ -197,11 +219,15 @@ class Simple_Pipeline:
             self.MEM_WB.alu_result = int.from_bytes(self.memory[addr:addr+8], 'little')
 
         # Instrucciones de bóveda
-        elif op == 0x90:  # vwr xSrc, idx
-            self.vault.write_key(self.EX_MEM.rs2, self.EX_MEM.alu_result)
+        elif op == 0x90:  # vwr rd, imm
+            key_index = self.EX_MEM.rd
+            value = self.EX_MEM.imm
+            self.vault.write_key(key_index, value)
             self.MEM_WB.alu_result = 0
-        elif op == 0x91:  # vinit xSrc, idx
-            self.vault.write_init(self.EX_MEM.rs2, self.EX_MEM.alu_result)
+        elif op == 0x91:  # vinit rd, imm
+            key_index = self.EX_MEM.rd
+            value = self.EX_MEM.imm
+            self.vault.write_init(key_index, value)
             self.MEM_WB.alu_result = 0
         elif op == 0x92:  # vsign idx, addr
             addr = self.EX_MEM.alu_result
@@ -211,8 +237,16 @@ class Simple_Pipeline:
                 int.from_bytes(self.memory[addr + i*8 : addr + (i+1)*8], 'little')
                 for i in range(4)
             ]
+            print(f"[DEBUG vsign] addr: 0x{addr:X}")
+            print(f"[DEBUG vsign] blocks: {[hex(b) for b in blocks]}")
+            print(f"[DEBUG vsign] key_idx: {key_idx}")
+            if hasattr(self.vault, 'keys'):
+                print(f"[DEBUG vsign] vault key: 0x{self.vault.keys[key_idx]:016X}")
+            if hasattr(self.vault, 'inits'):
+                print(f"[DEBUG vsign] vault inits: {[hex(v) for v in self.vault.inits]}")
             # Calcular firma con la bóveda
             S = self.vault.sign_block(key_idx, blocks)
+            print(f"[DEBUG vsign] signature: {[hex(s) for s in S]}")
             # Escribir firma después del mensaje
             for i, val in enumerate(S):
                 pos = addr + 4*8 + i*8

@@ -10,7 +10,7 @@ def main():
     print("=== SISTEMA TOYMDMA CON PIPELINE ISA ===\n")
     
     # Archivo objetivo: file_loader.py
-    target_file = "c:/Users/menei/Documents/GitHub/Proyecto1_Grupal_Arqui_S2_2025/ISA/prueba.txt"
+    target_file = r"C:\Users\jjsol.J1806\Desktop\Documents\TEC\IIS-2025\Arquitectura_de_Computadores_I\Proyectos\Proyecto_I\Proyecto1_Grupal_Arqui_S2_2025\ISA\prueba.txt"
     
     if not os.path.exists(target_file):
         print(f"Error: No se encuentra el archivo {target_file}")

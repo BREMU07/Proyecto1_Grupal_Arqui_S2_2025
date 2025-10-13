@@ -95,4 +95,3 @@ class Vault:
         ]
 
         return S
-

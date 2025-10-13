@@ -2,6 +2,7 @@
 
 from assembler import Assembler
 from simple_pipeline import Simple_Pipeline
+from vault import Vault
 import time
 
 class ISAPipelineHashProcessor:

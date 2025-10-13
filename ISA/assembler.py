@@ -18,7 +18,12 @@ class Assembler:
             'addi': 0xA9,    # Add immediate
             'rol': 0xAA,     # Rotate left immediate
             'muli': 0xAB,    # Multiply by immediate (for mul mix step)
-            'modi': 0xAC     # Modular reduce immediate (for modulo prime)
+            'modi': 0xAC,     # Modular reduce immediate (for modulo prime)
+
+            # --- Instrucciones de bóveda (Vault ISA) ---
+            'vwr':   0x90,   # Vault Write Register
+            'vinit': 0x91,   # Vault Initialize
+            'vsign': 0x92    # Vault Sign Block
         }
         
         # Codigos funct3 personalizados
@@ -38,7 +43,10 @@ class Assembler:
             'addi': 0x1,     # Add immediate function
             'rol': 0x3,
             'muli': 0x4,
-            'modi': 0x5
+            'modi': 0x5,
+            'vwr': 0x0, 
+            'vinit': 0x1, 
+            'vsign': 0x2
         }
         
         # Codigos funct7 personalizados
@@ -49,7 +57,11 @@ class Assembler:
             'and': 0x40,     # AND extended function
             'or': 0x50,     # OR extended function
             'xor': 0x60,    # XOR extended function
-            'not': 0x70     # NOT extended function
+            'not': 0x70,     # NOT extended function
+            'vwr': 0x08, 
+            'vinit': 0x09, 
+            'vsign': 0x0A
+
         }
 
     def parse_register(self, reg_str):
@@ -93,9 +105,10 @@ class Assembler:
             parts = line.replace(',', ' ').split()
             inst = parts[0].lower()
 
+            instruction = None
+
             # R-type instructions
             if inst in ['add', 'sub', 'mul', 'and', 'or', 'xor', 'not']:
-                # allow `not rd, rs1` (unary) as well as 3-operand R-type
                 if inst == 'not':
                     if len(parts) < 3:
                         raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
@@ -111,11 +124,11 @@ class Assembler:
                 f7 = self.funct7.get(inst, 0)
                 f3 = self.funct3.get(inst, 0)
                 op = self.opcodes[inst]
-                instr = self.encode_r64(f7, rs2, rs1, f3, rd, op)
+                instruction = self.encode_r64(f7, rs2, rs1, f3, rd, op)
 
             elif inst == 'lw':
                 rd = self.parse_register(parts[1])
-                off_str, rs1_str = parts[2].split('(')
+                offset_str, rs1_str = parts[2].split('(')
                 rs1 = self.parse_register(rs1_str[:-1])
                 try:
                     offset = int(offset_str, 0)
@@ -123,14 +136,11 @@ class Assembler:
                     raise ValueError(f"[line {lineno}] Invalid lw offset: {offset_str}")
                 instruction = self.encode_i64(offset, rs1, self.funct3['lw'], rd, self.opcodes['lw'])
 
-            # I-type immediate instructions: addi, rol, muli, modi
             elif inst in ['addi', 'rol', 'muli', 'modi']:
-                # syntax: addi rd, rs1, imm
                 if len(parts) < 4:
                     raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
                 rd = self.parse_register(parts[1])
                 rs1 = self.parse_register(parts[2])
-                # accept decimal or hex immediates (e.g. 123 or 0x7B)
                 try:
                     imm = int(parts[3], 0)
                 except ValueError:
@@ -139,7 +149,6 @@ class Assembler:
                 opcode = self.opcodes.get(inst)
                 instruction = self.encode_i64(imm, rs1, f3, rd, opcode)
 
-            # J-type instruction: jal rd, imm
             elif inst == 'jal':
                 if len(parts) < 3:
                     raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
@@ -150,10 +159,8 @@ class Assembler:
                     raise ValueError(f"[line {lineno}] Invalid immediate value: {parts[2]}")
                 f3 = self.funct3.get(inst, 0)
                 opcode = self.opcodes.get(inst)
-                # Use I-type encoding for JAL (immediate in lower 31 bits)
                 instruction = self.encode_i64(imm, 0, f3, rd, opcode)
 
-            # B-type instruction: beq rs1, rs2, imm
             elif inst == 'beq':
                 if len(parts) < 4:
                     raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
@@ -165,14 +172,35 @@ class Assembler:
                     raise ValueError(f"[line {lineno}] Invalid immediate value: {parts[3]}")
                 f3 = self.funct3.get(inst, 0)
                 opcode = self.opcodes.get(inst)
-                # Use R-type encoding with immediate in funct7 field and lower bits
-                # Store imm in bits [30-0], use rd=0 for branch instructions
                 instruction = self.encode_r64(0, rs2, rs1, f3, 0, opcode) | (imm & 0x7FFFFFFF)
+
+            elif inst in ['vwr', 'vinit']:
+                if len(parts) < 3:
+                    raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
+                rd = self.parse_register(parts[1])
+                try:
+                    imm = int(parts[2], 0)
+                except ValueError:
+                    raise ValueError(f"[line {lineno}] Invalid immediate value: {parts[2]}")
+                f3 = self.funct3.get(inst, 0)
+                opcode = self.opcodes.get(inst)
+                instruction = self.encode_i64(imm, 0, f3, rd, opcode)
+
+            elif inst == 'vsign':
+                if len(parts) < 4:
+                    raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
+                rd = self.parse_register(parts[1])
+                rs1 = self.parse_register(parts[2])
+                rs2 = self.parse_register(parts[3])
+                f7 = self.funct7.get(inst, 0)
+                f3 = self.funct3.get(inst, 0)
+                opcode = self.opcodes.get(inst)
+                instruction = self.encode_r64(f7, rs2, rs1, f3, rd, opcode)
 
             else:
                 raise ValueError(f"[line {lineno}] Unknown instruction: {inst}")
 
-            program.append(instr & 0xFFFFFFFFFFFFFFFF)
+            program.append(instruction & 0xFFFFFFFFFFFFFFFF)
 
         return program
 
