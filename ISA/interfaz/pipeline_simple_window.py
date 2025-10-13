@@ -21,6 +21,13 @@ class Simple_Pipeline_Window:
         self.execution_time = 0
         self.cycle_time_ns = 10  # Suponiendo 10 ns por ciclo
         self.num_instructions = 0
+        # Referencia a la ventana principal para verificar estado de superusuario
+        self.main_window = getattr(master, 'main_window', None)
+    def get_superuser_status(self):
+        # Siempre verifica la referencia de la ventana principal para estado en vivo
+        if self.main_window and hasattr(self.main_window, 'superuser_logged_in'):
+            return self.main_window.superuser_logged_in
+        return False
 
     def create_widgets(self):
         self.main_frame = tk.Frame(self.master, padx=10, pady=10)
@@ -45,7 +52,6 @@ class Simple_Pipeline_Window:
         self.hash_file_button = tk.Button(self.controls_frame, text="Load & Hash File", command=self.load_sign_and_verify_file)
         self.hash_file_button.pack(side=tk.LEFT, padx=5)
         
-
         self.status_frame = tk.Frame(self.main_frame)
         self.status_frame.pack(fill=tk.X, pady=5)
 
@@ -105,8 +111,6 @@ class Simple_Pipeline_Window:
         self.stats_text = tk.Text(self.data_frame, height=10, width=80)
         self.stats_text.grid(row=1, column=2, columnspan=2, padx=8, pady=5)
 
-
-    
     def update_pipeline_stages(self):
         stages_instructions = [
             ("IF", self.segmentado.IF_ID),
@@ -123,7 +127,6 @@ class Simple_Pipeline_Window:
             else:
                 self.stage_labels[i].config(text=f"{stage}\n----", bg="lightgray")
                         
-
     def load_program(self):
         # Abrir diálogo para seleccionar archivo
         file_path = filedialog.askopenfilename(
@@ -132,7 +135,6 @@ class Simple_Pipeline_Window:
         )
         if not file_path:
             return 
-
         try:
             # Leer el contenido del archivo
             with open(file_path, 'r') as f:
@@ -155,7 +157,10 @@ class Simple_Pipeline_Window:
         if not self.segmentado:
             messagebox.showwarning("Warning", "Load a program first.")
             return
-
+        # Bloquea las operaciones de bóveda si no esta logeado como superusuario
+        if not self.get_superuser_status():
+            messagebox.showerror("Superuser Required", "You must be logged in as superuser to use vault operations (vwr, vinit, vsign). Please login first.")
+            return
         try:
             while self.segmentado.is_pipeline_active():
                 output = self.segmentado.step()
@@ -305,7 +310,6 @@ class Simple_Pipeline_Window:
                 f"Firma: S1=0x{signature[0]:016X}, S2=0x{signature[1]:016X}, "
                 f"S3=0x{signature[2]:016X}, S4=0x{signature[3]:016X}\n"
             )
-
             
             result = processor.verify_signed_file(signed_file)
             is_valid = result["valid"]
@@ -321,9 +325,6 @@ class Simple_Pipeline_Window:
                 tk.END,
                 f"Hash componentes: {result['hash_components']}\n"
             )
-
-
-
 
             # Estadísticas de tamaño
             original_size = os.path.getsize(file_path)
@@ -350,14 +351,10 @@ class Simple_Pipeline_Window:
         self.update_registers()
         self.update_memory()
         
-
-
-
     def update_registers(self):
         self.registers_text.delete('1.0', tk.END)
         for i in range(len(self.segmentado.registers)):
             self.registers_text.insert(tk.END, f"x{i}: 0x{self.segmentado.registers[i]:08X}\n")
-
 
     def update_memory(self):
         self.memory_text.delete('1.0', tk.END)
@@ -371,7 +368,6 @@ class Simple_Pipeline_Window:
         for stage_name, stage_content in zip(stages, self.segmentado.pipeline):
             self.pipeline_text.insert(tk.END, f"{stage_name}: {stage_content}\n")
         
-
 if __name__ == "__main__":
     root = tk.Tk()
     app = Simple_Pipeline_Window(root)
