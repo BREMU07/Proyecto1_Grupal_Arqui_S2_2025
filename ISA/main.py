@@ -1,8 +1,5 @@
-# -------------------------
-# main.py - Sistema ToyMDMA con Pipeline ISA y Condicionales
-# -------------------------
-from isa_pipeline_hash import ISAPipelineHashProcessor
-import os
+import tkinter as tk
+from interfaz.main_window import MainWindow
 
 def main():
     """Funcion principal que demuestra el sistema completo ToyMDMA con ISA"""
@@ -61,6 +58,6 @@ def main():
         traceback.print_exc()
 
 if __name__ == "__main__":
-    main()
-
-
+    root = tk.Tk()
+    app = MainWindow(root)
+    root.mainloop()
