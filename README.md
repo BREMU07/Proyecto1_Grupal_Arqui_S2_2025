@@ -239,12 +239,6 @@ python main.py
 
 ## Estructura del ISA
 
-### Formato de Instrucciones (64 bits)
-
-```
-Tipo R: [funct7:7][rs2:5][rs1:5][funct3:3][rd:5][opcode:7][reserved:32]
-Tipo I: [imm:12][rs1:5][funct3:3][rd:5][opcode:7][reserved:32]
-```
 
 ### Conjunto de Instrucciones Soportadas
 
