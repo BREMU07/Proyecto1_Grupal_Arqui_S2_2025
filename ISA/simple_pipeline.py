@@ -98,6 +98,13 @@ class Simple_Pipeline:
             return
 
         op = self.ID_EX.opcode
+        
+        # Validar acceso a registros para evitar index out of range
+        if self.ID_EX.rs1 >= len(self.registers):
+            self.ID_EX.rs1 = 0
+        if self.ID_EX.rs2 >= len(self.registers):
+            self.ID_EX.rs2 = 0
+            
         rs1_val = self.registers[self.ID_EX.rs1]
         rs2_val = self.registers[self.ID_EX.rs2]
 
@@ -138,6 +145,9 @@ class Simple_Pipeline:
         # I-type lw con nuevo opcode
         elif op == 0xA1:  # lw
             alu_result = rs1_val + self.ID_EX.imm
+        # I-type sw con nuevo opcode
+        elif op == 0xB2:  # sw
+            alu_result = rs1_val + self.ID_EX.imm
         # I-type addi (add immediate)
         elif op == 0xA9:  # addi rd, rs1, imm
             alu_result = (rs1_val + self.ID_EX.imm) & 0xFFFFFFFFFFFFFFFF
@@ -162,6 +172,32 @@ class Simple_Pipeline:
             # ALU result not used for branch instructions
             alu_result = 0
 
+<<<<<<< Updated upstream
+=======
+        # Instrucciones especiales de bóveda (Vault)
+        elif op == 0x90:  # vwr rd, imm  -> escribe llave privada
+            index = self.ID_EX.rd & 0x3     # índice de 0–3
+            value = self.ID_EX.imm & 0xFFFFFFFFFFFFFFFF
+            self.vault.write_key(index, value)
+            alu_result = 0  # sin retorno
+
+        elif op == 0x91:  # vinit rd, imm -> inicializa valor de hash
+            index = self.ID_EX.rd & 0x3
+            value = self.ID_EX.imm & 0xFFFFFFFFFFFFFFFF
+            self.vault.write_init(index, value)
+            alu_result = 0
+
+        elif op == 0x92:  # vsign rd, rs1, rs2
+            # Debug: show value of address register before signature
+            print(f"[DEBUG EX_stage vsign] rs2 (x{self.ID_EX.rs2}) value: 0x{self.registers[self.ID_EX.rs2]:X}")
+            alu_result = self.registers[self.ID_EX.rs2]
+
+        elif op == 0x88:  # ebreak - Environment Break
+            # Detener el pipeline estableciendo PC fuera de rango
+            self.pc = len(self.memory)
+            alu_result = 0
+
+>>>>>>> Stashed changes
         # ensure 64-bit wraparound for any result
         alu_result &= 0xFFFFFFFFFFFFFFFF
 
@@ -189,7 +225,67 @@ class Simple_Pipeline:
         op = self.EX_MEM.opcode
         if op == 0xA1:  # lw con nuevo opcode personalizado
             addr = self.EX_MEM.alu_result
+<<<<<<< Updated upstream
             self.MEM_WB.alu_result = int.from_bytes(self.memory[addr:addr+8], 'little')
+=======
+            # Validar acceso a memoria
+            if addr + 8 <= len(self.memory):
+                self.MEM_WB.alu_result = int.from_bytes(self.memory[addr:addr+8], 'little')
+            else:
+                self.MEM_WB.alu_result = 0  # Valor por defecto si fuera de rango
+        elif op == 0xB2:  # sw con nuevo opcode personalizado
+            addr = self.EX_MEM.alu_result
+            # Validar acceso a registros y memoria
+            if self.EX_MEM.rs2 < len(self.registers) and addr + 8 <= len(self.memory):
+                data = self.registers[self.EX_MEM.rs2]  # Datos a almacenar
+                self.memory[addr:addr+8] = data.to_bytes(8, 'little')
+            self.MEM_WB.alu_result = 0
+
+        # Instrucciones de bóveda
+        elif op == 0x90:  # vwr rd, imm
+            key_index = self.EX_MEM.rd & 0x3  # Limitar a 0-3
+            value = self.EX_MEM.imm
+            self.vault.write_key(key_index, value)
+            self.MEM_WB.alu_result = 0
+        elif op == 0x91:  # vinit rd, imm
+            key_index = self.EX_MEM.rd & 0x3  # Limitar a 0-3
+            value = self.EX_MEM.imm
+            self.vault.write_init(key_index, value)
+            self.MEM_WB.alu_result = 0
+        elif op == 0x92:  # vsign idx, addr
+            addr = self.EX_MEM.alu_result
+            key_idx = self.EX_MEM.rs1
+            
+            # Validar que la dirección y el índice de clave estén en rango
+            if addr + 32 > len(self.memory):  # 4 bloques * 8 bytes = 32 bytes
+                print(f"[ERROR] vsign: memoria fuera de rango addr=0x{addr:X}")
+                self.MEM_WB.alu_result = 0
+            elif not hasattr(self.vault, 'keys') or key_idx >= len(self.vault.keys):
+                print(f"[ERROR] vsign: clave fuera de rango key_idx={key_idx}")
+                self.MEM_WB.alu_result = 0
+            else:
+                # Leer 4 bloques de 8 bytes
+                blocks = [
+                    int.from_bytes(self.memory[addr + i*8 : addr + (i+1)*8], 'little')
+                    for i in range(4)
+                ]
+                print(f"[DEBUG vsign] addr: 0x{addr:X}")
+                print(f"[DEBUG vsign] blocks: {[hex(b) for b in blocks]}")
+                print(f"[DEBUG vsign] key_idx: {key_idx}")
+                if hasattr(self.vault, 'keys'):
+                    print(f"[DEBUG vsign] vault key: 0x{self.vault.keys[key_idx]:016X}")
+                if hasattr(self.vault, 'inits'):
+                    print(f"[DEBUG vsign] vault inits: {[hex(v) for v in self.vault.inits]}")
+            # Calcular firma con la bóveda
+            S = self.vault.sign_block(key_idx, blocks)
+            print(f"[DEBUG vsign] signature: {[hex(s) for s in S]}")
+            # Escribir firma después del mensaje
+            for i, val in enumerate(S):
+                pos = addr + 4*8 + i*8
+                self.memory[pos:pos+8] = val.to_bytes(8, 'little')
+            self.MEM_WB.alu_result = 1  # éxito
+
+>>>>>>> Stashed changes
         else:  # R-type (opcodes 0xC3 y 0xF6)
             self.MEM_WB.alu_result = self.EX_MEM.alu_result
 
@@ -203,7 +299,7 @@ class Simple_Pipeline:
         if not self.MEM_WB.valid:
             return
 
-        if self.MEM_WB.rd != 0:  # x0 nunca cambia
+        if self.MEM_WB.rd != 0 and self.MEM_WB.rd < len(self.registers):  # x0 nunca cambia y validar rango
             self.registers[self.MEM_WB.rd] = self.MEM_WB.alu_result
 
         self.MEM_WB.valid = False
@@ -221,4 +317,106 @@ class Simple_Pipeline:
 
         self.cycle += 1
     
+    # -------------------------
+    # Procesador Universal ISA
+    # -------------------------
+    
+    def reset_processor(self):
+        """Reiniciar el procesador a estado inicial"""
+        self.memory = bytearray(4096)
+        self.registers = [0] * 32
+        self.pc = 0
+        self.cycle = 0
+        
+        # Limpiar pipeline
+        self.IF_ID = PipelinedRegister()
+        self.ID_EX = PipelinedRegister()
+        self.EX_MEM = PipelinedRegister()
+        self.MEM_WB = PipelinedRegister()
+        
+        # Reiniciar estadisticas
+        self.execution_stats = {
+            'cycles': 0,
+            'instructions_executed': 0,
+            'branches_taken': 0,
+            'pipeline_stalls': 0
+        }
+    
+    def execute_assembly_code(self, assembly_code, initial_registers=None, trace=False):
+        """
+        Ejecutar codigo assembly directamente
+        
+        Args:
+            assembly_code: String con codigo assembly
+            initial_registers: Dict con valores iniciales {reg_num: valor}
+            trace: Mostrar traza de ejecucion
+            
+        Returns:
+            dict: Estado final del procesador
+        """
+        # Reiniciar procesador
+        self.reset_processor()
+        self.trace = trace
+        
+        try:
+            # Compilar assembly
+            instructions = self.assembler.assemble(assembly_code)
+            
+            # Cargar programa
+            self.load_program(instructions)
+            
+            # Establecer registros iniciales
+            if initial_registers:
+                for reg_num, value in initial_registers.items():
+                    if 0 <= reg_num < 32:
+                        self.registers[reg_num] = value & 0xFFFFFFFFFFFFFFFF
+            
+            # Ejecutar programa
+            cycles_executed = self.run_program()
+            
+            # Preparar resultados
+            result = {
+                'success': True,
+                'cycles': cycles_executed,
+                'registers': {f'x{i}': self.registers[i] for i in range(32) if self.registers[i] != 0},
+                'pc_final': self.pc,
+                'memory_used': len([b for b in self.memory if b != 0]),
+                'stats': self.execution_stats.copy()
+            }
+            
+            return result
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'cycles': self.cycle,
+                'registers': {f'x{i}': self.registers[i] for i in range(32) if self.registers[i] != 0}
+            }
+    
+    def run_program(self, max_cycles=10000):
+        """
+        Ejecutar programa cargado hasta completarse
+        
+        Args:
+            max_cycles: Limite de ciclos para evitar bucles infinitos
+            
+        Returns:
+            int: Numero de ciclos ejecutados
+        """
+        start_cycle = self.cycle
+        
+        while self.is_pipeline_active() and (self.cycle - start_cycle) < max_cycles:            
+            self.step()
+            
+            # Actualizar estadisticas
+            if self.MEM_WB.valid:
+                self.execution_stats['instructions_executed'] += 1
+        
+        self.execution_stats['cycles'] = self.cycle - start_cycle
+        
+        if (self.cycle - start_cycle) >= max_cycles:
+            raise RuntimeError(f"Programa excedio {max_cycles} ciclos - posible bucle infinito")
+        
+        return self.cycle - start_cycle
 

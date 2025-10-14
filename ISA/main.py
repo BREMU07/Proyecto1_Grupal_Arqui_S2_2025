@@ -4,6 +4,7 @@
 from isa_pipeline_hash import ISAPipelineHashProcessor
 import os
 
+<<<<<<< Updated upstream
 def main():
     """Funcion principal que demuestra el sistema completo ToyMDMA con ISA"""
     
@@ -64,3 +65,9 @@ if __name__ == "__main__":
     main()
 
 
+=======
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = MainWindow(root)
+    root.mainloop()
+>>>>>>> Stashed changes
