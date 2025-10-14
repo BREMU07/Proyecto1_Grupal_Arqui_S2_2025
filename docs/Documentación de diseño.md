@@ -32,9 +32,9 @@ Cada instruccione se codifica en 64 bits, con campos para opcode, registros, y v
 ## Tipos de instrucciones
 
 - Aritméticas y lógicas: ADD, SUB, AND, OR, XOR, etc.
-- Transferencia: LOAD, STORE para mover datos entre memoria y registros.
+- Transferencia: LOAD, STORE (`lw`, `sw`) para mover datos entre memoria y registros.
 - Control: JUMP, BRANCH para modificar el flujo de ejecución.
-- Especiales de bóveda: `vwr` (escribir clave), `vinit` (inicializar hash), `vsign` (firmar bloque).
+- Especiales: `vwr` (escribir clave), `vinit` (inicializar hash), `vsign` (firmar bloque).
 
 Se incluyen instrucciones esenciales para la computación general y operaciones especializadas para seguridad, manteniendo la ISA compacta y funcional.
 
