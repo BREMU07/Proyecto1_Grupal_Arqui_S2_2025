@@ -268,6 +268,16 @@ Tipo I: [imm:12][rs1:5][funct3:3][rd:5][opcode:7][reserved:32]
 - VINIT (Vault Initialize)  
 - VSIGN (Vault Sign)
 
+
+### Diagrama de bloques general del sistema
+
+<img width="948" height="391" alt="image" src="https://github.com/user-attachments/assets/112adfae-11c3-4c35-a871-f6d71af7dec2" />
+
+### Diagrama de microarquitectura del procesador
+
+<img width="1121" height="597" alt="image" src="https://github.com/user-attachments/assets/f5950dc9-43ae-432d-8ac6-0bc80556b835" />
+
+
 ## Notas de Implementacion
 
 - El pipeline implementa deteccion y manejo de riesgos de datos
