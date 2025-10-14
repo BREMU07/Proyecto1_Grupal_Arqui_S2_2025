@@ -2,10 +2,11 @@ import tkinter as tk
 from tkinter import ttk, Menu
 from interfaz.pipeline_simple_window import Simple_Pipeline_Window
 
+
 class MainWindow:
     def __init__(self, master):
         self.master = master
-        self.master.title("Simulator ISA and Signing")
+        self.master.title("Simulador ISA y Firma")
         self.master.geometry("800x600")
         self.superuser_logged_in = False
         self.create_widgets()
@@ -22,42 +23,42 @@ class MainWindow:
         self.button_frame = tk.Frame(self.frame)
         self.button_frame.pack(pady=10)
 
-        self.pipeline_button = tk.Button(self.button_frame, text="Firmar archivo", command=self.open_pipeline_simple, font=("Helvetica", 16))
+        self.pipeline_button = tk.Button(self.button_frame, text="Cargar archivo", command=self.open_pipeline_simple, font=("Helvetica", 16))
         self.pipeline_button.pack(pady=5, padx=10)
 
         # Boton de login
         self.login_button = tk.Button(self.button_frame, text="Login", command=self.login_prompt, font=("Helvetica", 16))
         self.login_button.pack(pady=5, padx=10)
 
-        # Botón para salir
-        self.exit_button = tk.Button(self.button_frame, text="Exit", command=self.master.quit, font=("Helvetica", 16))
+        # Boton para salir
+        self.exit_button = tk.Button(self.button_frame, text="Salir", command=self.master.quit, font=("Helvetica", 16))
         self.exit_button.pack(pady=5, padx=10)
 
     def login_prompt(self):
         import tkinter.simpledialog
-        password = tkinter.simpledialog.askstring("Login", "Contraseña:", show='*', parent=self.master)
+        password = tkinter.simpledialog.askstring("Login", "Contrasena:", show='*', parent=self.master)
         if password is None:
             return
-        # Contraseña fija para demostración
+        # Contrasena fija para demostracion
         if password == "superuser":
             self.superuser_logged_in = True
             print("Logeado como superusuario")
         else:
-            print("Contraseña incorrecta: vuelva a intentarlo")
+            print("Contrasena incorrecta: vuelva a intentarlo")
 
     def create_menu(self):
         self.menubar = Menu(self.master)
         self.master.config(menu=self.menubar)
 
         self.file_menu = Menu(self.menubar, tearoff=0)
-        self.menubar.add_cascade(label="File", menu=self.file_menu)
-        self.file_menu.add_command(label="Open", command=self.open_file)
+        self.menubar.add_cascade(label="Archivo", menu=self.file_menu)
+        self.file_menu.add_command(label="Abrir", command=self.open_file)
         self.file_menu.add_separator()
-        self.file_menu.add_command(label="Exit", command=self.master.quit)
+        self.file_menu.add_command(label="Salir", command=self.master.quit)
 
         self.help_menu = Menu(self.menubar, tearoff=0)
-        self.menubar.add_cascade(label="Help", menu=self.help_menu)
-        self.help_menu.add_command(label="About", command=self.show_about)
+        self.menubar.add_cascade(label="Ayuda", menu=self.help_menu)
+        self.help_menu.add_command(label="Acerca de", command=self.show_about)
 
     def open_pipeline_simple(self):
         pipeline_simple_window = tk.Toplevel(self.master)
@@ -69,7 +70,7 @@ class MainWindow:
 
     def show_about(self):
         about_window = tk.Toplevel(self.master)
-        about_window.title("About Original ISA and Signing")
+        about_window.title("Acerca de")
         about_window.geometry("400x300")
         label = tk.Label(about_window, text="Original ISA and Signing\nVersion 1.0", font=("Helvetica", 14), justify=tk.CENTER)
         label.pack(expand=True, pady=20)

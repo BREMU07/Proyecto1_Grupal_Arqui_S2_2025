@@ -1,6 +1,6 @@
 # vault.py
 # ----------------------------------------------------------
-# Simulación de la bóveda segura para la ISA personalizada
+# Simulacion de la boveda segura para la ISA personalizada
 # ----------------------------------------------------------
 
 def rol64(x, r):
@@ -35,8 +35,8 @@ def toy_mdma_hash_block(block, a, b, c, d):
 
 class Vault:
     """
-    Bóveda segura para almacenamiento de llaves e inicialización de hash.
-    - Las llaves privadas NUNCA se exponen fuera de este módulo.
+    Boveda segura para almacenamiento de llaves e inicializacion de hash.
+    - Las llaves privadas NUNCA se exponen fuera de este modulo.
     - Solo las instrucciones autorizadas (vwr, vinit, vsign) pueden operar con ellas.
     """
     def __init__(self, num_keys=4):
@@ -49,7 +49,7 @@ class Vault:
     # Métodos de escritura segura
     # ----------------------------------------------------------
     def write_key(self, index, value):
-        """Guarda una llave privada en la bóveda."""
+        """Guarda una llave privada en la boveda."""
         if 0 <= index < len(self.keys):
             self.keys[index] = value & 0xFFFFFFFFFFFFFFFF
 
@@ -66,7 +66,7 @@ class Vault:
         Aplica el algoritmo ToyMDMA sobre los datos y genera una firma segura.
 
         Entradas:
-          - key_idx: índice de la llave privada (0–3)
+          - key_idx: indice de la llave privada (0-3)
           - data_blocks: lista de 4 bloques de 64 bits
         Salida:
           - Lista de 4 palabras (S0..S3) firmadas con la llave privada
@@ -76,7 +76,7 @@ class Vault:
 
         K = self.keys[key_idx]
 
-        # Inicialización: si no hay valores definidos, usar constantes base
+        # Inicializacion: si no hay valores definidos, usar constantes base
         A = self.inits[0] if self.inits[0] else 0x0123456789ABCDEF
         B = self.inits[1] if self.inits[1] else 0x0F0E0D0C0B0A0908
         C = self.inits[2] if self.inits[2] else 0x0011223344556677
@@ -95,3 +95,22 @@ class Vault:
         ]
 
         return S
+
+    def recover_components_from_signature(self, key_idx, signature):
+        """
+        Recupera internamente A,B,C,D desde una firma aplicando XOR con la llave almacenada.
+        Esto mantiene la llave dentro de la boveda y no la expone.
+        """
+        if not (0 <= key_idx < len(self.keys)):
+            return None
+        K = self.keys[key_idx]
+        return tuple((s ^ K) & 0xFFFFFFFFFFFFFFFF for s in signature)
+
+    def sign_components(self, key_idx, components):
+        """
+        Dado A,B,C,D, produce los componentes de la firma S0..S3 aplicando XOR con la llave almacenada.
+        """
+        if not (0 <= key_idx < len(self.keys)):
+            return [0, 0, 0, 0]
+        K = self.keys[key_idx]
+        return [ (c ^ K) & 0xFFFFFFFFFFFFFFFF for c in components ]

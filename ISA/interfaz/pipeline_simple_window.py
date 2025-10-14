@@ -36,31 +36,27 @@ class Simple_Pipeline_Window:
         self.controls_frame = tk.Frame(self.main_frame)
         self.controls_frame.pack(fill=tk.X, pady=5)
 
-        self.load_button = tk.Button(self.controls_frame, text="Load Program", command=self.load_program)
+        self.load_button = tk.Button(self.controls_frame, text="Cargar Programa", command=self.load_program)
         self.load_button.pack(side=tk.LEFT, padx=5)
-
-        self.run_button = tk.Button(self.controls_frame, text="Run Program", command=self.run_program)
+        self.run_button = tk.Button(self.controls_frame, text="Ejecutar Programa", command=self.run_program)
         self.run_button.pack(side=tk.LEFT, padx=5)
-
-        self.step_button = tk.Button(self.controls_frame, text="Step", command=self.step_program)
+        self.step_button = tk.Button(self.controls_frame, text="Paso", command=self.step_program)
         self.step_button.pack(side=tk.LEFT, padx=5)
-
-        self.run_timed_button = tk.Button(self.controls_frame, text="Run Timed", command=self.run_timed_program)
+        self.run_timed_button = tk.Button(self.controls_frame, text="Ejecutar Temporizado", command=self.run_timed_program)
         self.run_timed_button.pack(side=tk.LEFT, padx=5)
-
-        # Botón para procesar archivo ToyMDMA
-        self.hash_file_button = tk.Button(self.controls_frame, text="Load & Hash File", command=self.load_sign_and_verify_file)
+    # Boton para procesar archivo ToyMDMA y firmarlo con la boveda
+        self.hash_file_button = tk.Button(self.controls_frame, text="Firmar Archivo", command=self.load_sign_and_verify_file)
         self.hash_file_button.pack(side=tk.LEFT, padx=5)
+        self.verify_signature_button = tk.Button(self.controls_frame, text="Verificar Firma", command=self.verify_signature_file)
+        self.verify_signature_button.pack(side=tk.LEFT, padx=5)
         
         self.status_frame = tk.Frame(self.main_frame)
         self.status_frame.pack(fill=tk.X, pady=5)
 
-        self.cycle_label = tk.Label(self.status_frame, text="Cycle: 0")
+        self.cycle_label = tk.Label(self.status_frame, text="Ciclo: 0")
         self.cycle_label.pack(side=tk.LEFT, padx=5)
-
-        self.time_label = tk.Label(self.status_frame, text="Execution Time: 0.0s")
+        self.time_label = tk.Label(self.status_frame, text="Tiempo de ejecucion: 0.0s")
         self.time_label.pack(side=tk.LEFT, padx=5)
-
         self.pc_label = tk.Label(self.status_frame, text="PC: 0x00000000")
         self.pc_label.pack(side=tk.LEFT, padx=5)
 
@@ -81,31 +77,31 @@ class Simple_Pipeline_Window:
         self.data_frame = tk.Frame(self.main_frame)
         self.data_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.registers_label = tk.Label(self.data_frame, text="Registers", font=("Helvetica", 14))
+        self.registers_label = tk.Label(self.data_frame, text="Registros", font=("Helvetica", 14))
         self.registers_label.grid(row=0, column=0, padx=10, pady=5, sticky=tk.W)
 
         self.registers_text = tk.Text(self.data_frame, height=10, width=30)
         self.registers_text.grid(row=1, column=0, padx=10, pady=5, sticky=tk.W)
 
-        self.memory_label = tk.Label(self.data_frame, text="Memory", font=("Helvetica", 14))
+        self.memory_label = tk.Label(self.data_frame, text="Memoria", font=("Helvetica", 14))
         self.memory_label.grid(row=0, column=1, padx=10, pady=5, sticky=tk.W)
 
         self.memory_text = tk.Text(self.data_frame, height=10, width=30)
         self.memory_text.grid(row=1, column=1, padx=10, pady=5, sticky=tk.W)
 
-        self.assembly_label = tk.Label(self.data_frame, text="Assembly Code", font=("Helvetica", 14))
+        self.assembly_label = tk.Label(self.data_frame, text="Codigo Ensamblador", font=("Helvetica", 14))
         self.assembly_label.grid(row=2, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
 
         self.assembly_text = tk.Text(self.data_frame, height=10, width=80)
         self.assembly_text.grid(row=3, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
 
-        self.output_label = tk.Label(self.data_frame, text="Output", font=("Helvetica", 14))
+        self.output_label = tk.Label(self.data_frame, text="Salida", font=("Helvetica", 14))
         self.output_label.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
 
         self.output_text = tk.Text(self.data_frame, height=10, width=80)
         self.output_text.grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky=tk.W)
 
-        self.stats_label = tk.Label(self.data_frame, text="Statistics", font=("Helvetica", 14))
+        self.stats_label = tk.Label(self.data_frame, text="Estadisticas", font=("Helvetica", 14))
         self.stats_label.grid(row=0, column=2, columnspan=2, padx=8, pady=5)
 
         self.stats_text = tk.Text(self.data_frame, height=10, width=80)
@@ -136,8 +132,8 @@ class Simple_Pipeline_Window:
         if not file_path:
             return 
         try:
-            # Leer el contenido del archivo
-            with open(file_path, 'r') as f:
+            # Leer el contenido del archivo (usar UTF-8 para evitar problemas de codificacion)
+            with open(file_path, 'r', encoding='utf-8') as f:
                 assembly_code = f.read()
 
             # Pegar el contenido en el Text widget
@@ -206,6 +202,54 @@ class Simple_Pipeline_Window:
             self.update_ui()
         except Exception as e:
             messagebox.showerror("Error", f"Error during step: {e}")
+
+    def verify_signature_file(self):
+        # Seleccionar fichero firmado para verificar
+        file_path = filedialog.askopenfilename(
+            title="Seleccionar fichero firmado",
+            filetypes=[("Signed Files", "*_signed.bin"), ("All Files", "*.*")]
+        )
+        if not file_path:
+            return
+
+        try:
+            # Leer firma embebida (ultimo 32 bytes) y documento
+            with open(file_path, 'rb') as f:
+                data = f.read()
+            if len(data) < 32:
+                self.output_text.insert(tk.END, "Fichero demasiado pequeno para contener firma\n")
+                return
+            document = data[:-32]
+            signature_bytes = data[-32:]
+            signature = tuple(int.from_bytes(signature_bytes[i*8:(i+1)*8], 'little') for i in range(4))
+
+            # Debe usarse la boveda para recuperar componentes desde la firma
+            if not hasattr(self.segmentado, 'vault') or self.segmentado.vault is None:
+                self.output_text.insert(tk.END, "Error: no hay boveda disponible en el pipeline\n")
+                return
+
+            vault = self.segmentado.vault
+            vault_index = 0
+
+            # Recuperar A,B,C,D desde la firma mediante la boveda (sin exponer la clave)
+            recovered = vault.recover_components_from_signature(vault_index, signature)
+            if recovered is None:
+                self.output_text.insert(tk.END, "Error: indice de clave fuera de rango en la boveda\n")
+                return
+
+            # Volver a firmar con la boveda las componentes recuperadas y comparar
+            expected_sig = tuple(vault.sign_components(vault_index, recovered))
+            match = (expected_sig == signature)
+
+            self.output_text.insert(tk.END, f"Componentes recuperadas por boveda: {[hex(x) for x in recovered]}\n")
+            self.output_text.insert(tk.END, f"Firma esperada (boveda): {[hex(x) for x in expected_sig]}\n")
+            self.output_text.insert(tk.END, f"Firma embebida: {[hex(x) for x in signature]}\n")
+            self.output_text.insert(tk.END, f"Verificacion: {'VALIDA' if match else 'INVALIDA'}\n")
+            self.output_text.see(tk.END)
+
+        except Exception as e:
+            self.output_text.insert(tk.END, f"Error verificando firma: {e}\n")
+            self.output_text.see(tk.END)
 
     def record_statistics(self):
         num_cycles = self.segmentado.cycle
@@ -299,32 +343,25 @@ class Simple_Pipeline_Window:
             final_hash = (A ^ B ^ C ^ D) & 0xFFFFFFFFFFFFFFFF
             self.output_text.insert(tk.END, f"\nHash final: 0x{final_hash:016X}\n")
 
+            # Usar la boveda si el usuario esta autenticado como superuser
+            key_param = None
+            if self.get_superuser_status():
+                key_param = {'use_vault': True, 'vault_index': 0}
+
             # Crear archivo firmado
-            signature_info = processor.create_signed_file(file_path, signed_file)
+            signature_info = processor.create_signed_file(file_path, signed_file, key=key_param)
             signature = signature_info['signature']
             private_key = signature_info.get('private_key', processor.private_key)
 
-            self.output_text.insert(
-                tk.END,
-                f"Archivo firmado: {signed_file}\n"
-                f"Firma: S1=0x{signature[0]:016X}, S2=0x{signature[1]:016X}, "
-                f"S3=0x{signature[2]:016X}, S4=0x{signature[3]:016X}\n"
-            )
+            self.output_text.insert(tk.END, f"Archivo firmado: {signed_file}\n")
+            self.output_text.insert(tk.END, f"Firma: S1=0x{signature[0]:016X}, S2=0x{signature[1]:016X}, S3=0x{signature[2]:016X}, S4=0x{signature[3]:016X}\n")
             
-            result = processor.verify_signed_file(signed_file)
+            # Verificar: si se uso boveda (key_param) la verificacion se hace con boveda
+            result = processor.verify_signed_file(signed_file, key=key_param)
             is_valid = result["valid"]
-            self.output_text.insert(
-                tk.END,
-                f"Verificación de firma: {'VÁLIDA' if is_valid else 'INVÁLIDA'}\n"
-            )
-            self.output_text.insert(
-                tk.END,
-                f"Detalles de firma: {result['signature']}\n"
-            )
-            self.output_text.insert(
-                tk.END,
-                f"Hash componentes: {result['hash_components']}\n"
-            )
+            self.output_text.insert(tk.END, f"Verificacion de firma: {'VALIDA' if is_valid else 'INVALIDA'}\n")
+            self.output_text.insert(tk.END, f"Detalles de firma: {result['signature']}\n")
+            self.output_text.insert(tk.END, f"Hash componentes: {result['hash_components']}\n")
 
             # Estadísticas de tamaño
             original_size = os.path.getsize(file_path)

@@ -25,7 +25,7 @@ class ISAPipelineHashProcessor:
         return self.calculate_hash_from_data(data)
 
     def calculate_hash_from_data(self, data):
-        # --- REINICIAR PIPELINE PARA VERIFICACION LIMPIA ---
+    # --- REINICIAR PIPELINE PARA VERIFICACION LIMPIA ---
         self.program_loaded = False
         self.pipeline = Simple_Pipeline(trace=False)
 
@@ -111,6 +111,33 @@ class ISAPipelineHashProcessor:
             key = self.private_key
         return (A ^ key, B ^ key, C ^ key, D ^ key)
 
+    def sign_hash_with_vault(self, A, B, C, D, key_idx=0):
+        """
+        Usa la boveda del pipeline para firmar los 4 componentes del hash.
+        Esto no expone la llave privada: se pide a la boveda que compute la firma
+        (la boveda aplica XOR internamente con la llave almacenada).
+        """
+        # Prepare components
+        components = [A & 0xFFFFFFFFFFFFFFFF, B & 0xFFFFFFFFFFFFFFFF,
+                      C & 0xFFFFFFFFFFFFFFFF, D & 0xFFFFFFFFFFFFFFFF]
+        # Ensure pipeline has a vault instance
+        if not hasattr(self.pipeline, 'vault') or self.pipeline.vault is None:
+            v = Vault()
+        else:
+            v = self.pipeline.vault
+        # Use sign_components to XOR components with the key (no extra hashing)
+        return tuple(v.sign_components(key_idx, components))
+
+    def invert_signature(self, signature, key=None):
+        """
+        Dada una firma y la llave, recuperar los componentes A,B,C,D originales
+        (como firma = componentes XOR llave, invertir es XOR con la misma llave).
+        Si key es None se usa private_key del procesador.
+        """
+        if key is None:
+            key = self.private_key
+        return (signature[0] ^ key, signature[1] ^ key, signature[2] ^ key, signature[3] ^ key)
+
     def verify_signature(self, signature, A, B, C, D, key=None):
         if key is None:
             key = self.private_key
@@ -121,8 +148,21 @@ class ISAPipelineHashProcessor:
 
     # --- CREAR ARCHIVO FIRMADO ---
     def create_signed_file(self, original_file, signed_file, key=None):
+        # By default sign with local private_key. If key is a dict with
+        # {'use_vault': True, 'vault_index': n} then request signature from the vault.
         hash_info = self.calculate_hash_components(original_file)
-        signature = self.sign_hash(hash_info["A"], hash_info["B"], hash_info["C"], hash_info["D"], key)
+        use_vault = False
+        vault_index = 0
+        if isinstance(key, dict):
+            use_vault = key.get('use_vault', False)
+            vault_index = key.get('vault_index', 0)
+
+        if use_vault:
+            signature = self.sign_hash_with_vault(hash_info["A"], hash_info["B"], hash_info["C"], hash_info["D"], vault_index)
+            private_key_used = None
+        else:
+            signature = self.sign_hash(hash_info["A"], hash_info["B"], hash_info["C"], hash_info["D"], key)
+            private_key_used = key if key is not None else self.private_key
         original_data = self.load_file(original_file)
 
         with open(signed_file, 'wb') as f:
@@ -134,11 +174,17 @@ class ISAPipelineHashProcessor:
             "signed_file": signed_file,
             "signature": signature,
             "hash_components": {"A": hash_info["A"], "B": hash_info["B"], "C": hash_info["C"], "D": hash_info["D"]},
-            "file_size": len(original_data)
+            "file_size": len(original_data),
+            "private_key_used": private_key_used
         }
 
     # --- VERIFICAR ARCHIVO FIRMADO ---
     def verify_signed_file(self, signed_file, key=None):
+        """
+        Verifica un archivo firmado. Si `key` es un dict con {'use_vault': True, 'vault_index': n}
+        la verificacion pedira a la boveda que produzca la firma esperada y la comparara.
+        Si no, se usa la llave local (o proporcionada) para invertir la firma y comparar.
+        """
         with open(signed_file, 'rb') as f:
             data = f.read()
 
@@ -155,20 +201,73 @@ class ISAPipelineHashProcessor:
             signature.append(sig_component)
         signature = tuple(signature)
 
-        # --- REINICIAR PIPELINE PARA VERIFICACION LIMPIA ---
-        hash_result = self.calculate_hash_from_data(document_data)
-        A = hash_result["A"]
-        B = hash_result["B"]
-        C = hash_result["C"]
-        D = hash_result["D"]
+        # Instead of recomputing the hash, run the reverse_hash.asm program on the pipeline
+        # The reverse program will read the embedded signature placed in memory and recover A,B,C,D
+        # Prepare pipeline and program
+        rev_path = os.path.join(os.path.dirname(__file__), 'reverse_hash.asm')
+        if not os.path.exists(rev_path):
+            raise FileNotFoundError(f"reverse_hash.asm not found at {rev_path}")
 
-        is_valid = self.verify_signature(signature, A, B, C, D, key)
+        with open(rev_path, 'r', encoding='utf-8') as rf:
+            rev_code = rf.read()
+
+        # Assemble the reverse program and load into pipeline
+        rev_program = self.assembler.assemble(rev_code)
+        # reset pipeline
+        self.program_loaded = False
+        self.pipeline = Simple_Pipeline(trace=False)
+        self.pipeline.load_program(rev_program)
+
+        # Load the signature into pipeline memory at base 0x400 (as reverse_hash.asm expects)
+        base = 0x400
+        # write document into memory starting at 0 (so any data remains), not strictly needed by reverse
+        if len(document_data) <= len(self.pipeline.memory):
+            self.pipeline.memory[0:len(document_data)] = document_data
+
+        # write signature into memory
+        for i in range(4):
+            self.pipeline.memory[base + i*8: base + (i+1)*8] = signature[i].to_bytes(8, 'little')
+
+        # Run pipeline until it halts or reaches step limit
+        steps = 0
+        max_steps = 500
+        while self.pipeline.is_pipeline_active() and steps < max_steps:
+            self.pipeline.step()
+            steps += 1
+        if steps >= max_steps:
+            raise RuntimeError('reverse_hash program exceeded step limit')
+
+        # Read recovered components from memory (reverse_hash writes them at base+32..base+56)
+        A = int.from_bytes(self.pipeline.memory[base + 32: base + 40], 'little')
+        B = int.from_bytes(self.pipeline.memory[base + 40: base + 48], 'little')
+        C = int.from_bytes(self.pipeline.memory[base + 48: base + 56], 'little')
+        D = int.from_bytes(self.pipeline.memory[base + 56: base + 64], 'little')
+
+        # If key is a dict and requests vault verification, ask the vault to produce expected signature
+        if isinstance(key, dict) and key.get('use_vault', False):
+            vault_index = key.get('vault_index', 0)
+            # Ensure pipeline has a vault instance
+            if not hasattr(self.pipeline, 'vault') or self.pipeline.vault is None:
+                v = Vault()
+            else:
+                v = self.pipeline.vault
+            # expected signature is simply XOR of components with key (use sign_components)
+            expected_sig = tuple(v.sign_components(vault_index, [A, B, C, D]))
+            is_valid = (expected_sig == signature)
+            used_key = None
+        else:
+            # Use provided key or the processor's private key to invert signature
+            used_key = key if key is not None else self.private_key
+            recovered = self.invert_signature(signature, used_key)
+            is_valid = (recovered[0] == A and recovered[1] == B and recovered[2] == C and recovered[3] == D)
 
         return {
             "valid": is_valid,
             "signature": signature,
             "hash_components": {"A": A, "B": B, "C": C, "D": D},
-            "document_size": len(document_data)
+            "document_size": len(document_data),
+            "vault_verification": isinstance(key, dict) and key.get('use_vault', False),
+            "used_key": (None if isinstance(key, dict) and key.get('use_vault', False) else used_key)
         }
 
 
