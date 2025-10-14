@@ -10,9 +10,43 @@ import os
 class ISAPipelineHashProcessor:
     def __init__(self):
         self.assembler = Assembler()
+        # default local private key (fallback). If a Vault is attached, prefer Vault keys.
         self.private_key = 0x123456789ABCDEF0
         self.pipeline = Simple_Pipeline(trace=False)
         self.program_loaded = False
+
+    def _resolve_key(self, key):
+
+        if isinstance(key, int):
+            return key & 0xFFFFFFFFFFFFFFFF
+
+        # request from vault
+        if isinstance(key, dict) and key.get('use_vault', False):
+            vault_index = key.get('vault_index', 0)
+            if hasattr(self.pipeline, 'vault') and self.pipeline.vault is not None:
+                v = self.pipeline.vault
+            else:
+                v = Vault()
+                # attach to pipeline for future calls
+                try:
+                    self.pipeline.vault = v
+                except Exception:
+                    pass
+            try:
+                return int(v.keys[vault_index]) & 0xFFFFFFFFFFFFFFFF
+            except Exception:
+                return 0
+
+        # no key provided: prefer pipeline vault if present
+        if key is None:
+            if hasattr(self.pipeline, 'vault') and self.pipeline.vault is not None:
+                try:
+                    return int(self.pipeline.vault.keys[0]) & 0xFFFFFFFFFFFFFFFF
+                except Exception:
+                    return self.private_key
+            return self.private_key
+
+        return self.private_key
 
     # --- ARCHIVOS ---
     def load_file(self, file_path):
@@ -107,9 +141,8 @@ class ISAPipelineHashProcessor:
 
     # --- FIRMA ---
     def sign_hash(self, A, B, C, D, key=None):
-        if key is None:
-            key = self.private_key
-        return (A ^ key, B ^ key, C ^ key, D ^ key)
+        k = self._resolve_key(key)
+        return (A ^ k, B ^ k, C ^ k, D ^ k)
 
     def sign_hash_with_vault(self, A, B, C, D, key_idx=0):
         """
@@ -120,9 +153,14 @@ class ISAPipelineHashProcessor:
         # Prepare components
         components = [A & 0xFFFFFFFFFFFFFFFF, B & 0xFFFFFFFFFFFFFFFF,
                       C & 0xFFFFFFFFFFFFFFFF, D & 0xFFFFFFFFFFFFFFFF]
-        # Ensure pipeline has a vault instance
+        # Ensure pipeline has a vault instance and attach it so signing and later verification
+        # can reuse the same vault instance (avoid ephemeral vaults that lose keys).
         if not hasattr(self.pipeline, 'vault') or self.pipeline.vault is None:
             v = Vault()
+            try:
+                self.pipeline.vault = v
+            except Exception:
+                pass
         else:
             v = self.pipeline.vault
         # Use sign_components to XOR components with the key (no extra hashing)
@@ -134,17 +172,15 @@ class ISAPipelineHashProcessor:
         (como firma = componentes XOR llave, invertir es XOR con la misma llave).
         Si key es None se usa private_key del procesador.
         """
-        if key is None:
-            key = self.private_key
-        return (signature[0] ^ key, signature[1] ^ key, signature[2] ^ key, signature[3] ^ key)
+        k = self._resolve_key(key)
+        return (signature[0] ^ k, signature[1] ^ k, signature[2] ^ k, signature[3] ^ k)
 
     def verify_signature(self, signature, A, B, C, D, key=None):
-        if key is None:
-            key = self.private_key
-        return (signature[0] ^ key == A and
-                signature[1] ^ key == B and
-                signature[2] ^ key == C and
-                signature[3] ^ key == D)
+        k = self._resolve_key(key)
+        return (signature[0] ^ k == A and
+                signature[1] ^ k == B and
+                signature[2] ^ k == C and
+                signature[3] ^ k == D)
 
     # --- CREAR ARCHIVO FIRMADO ---
     def create_signed_file(self, original_file, signed_file, key=None):
@@ -156,6 +192,11 @@ class ISAPipelineHashProcessor:
         if isinstance(key, dict):
             use_vault = key.get('use_vault', False)
             vault_index = key.get('vault_index', 0)
+
+        # If no key specified but a Vault is attached to the pipeline, prefer using the Vault
+        if key is None and hasattr(self.pipeline, 'vault') and self.pipeline.vault is not None:
+            use_vault = True
+            vault_index = 0
 
         if use_vault:
             signature = self.sign_hash_with_vault(hash_info["A"], hash_info["B"], hash_info["C"], hash_info["D"], vault_index)
@@ -211,22 +252,76 @@ class ISAPipelineHashProcessor:
         with open(rev_path, 'r', encoding='utf-8') as rf:
             rev_code = rf.read()
 
+        # If caller didn't pass a key but the pipeline has a Vault attached,
+        # prefer using the Vault for verification so the reverse program will
+        # be provided with the correct key in memory.
+        if key is None and hasattr(self.pipeline, 'vault') and self.pipeline.vault is not None:
+            key = {'use_vault': True, 'vault_index': 0}
+
         # Assemble the reverse program and load into pipeline
         rev_program = self.assembler.assemble(rev_code)
-        # reset pipeline
+        # reset pipeline but preserve any existing Vault instance so verification can use same keys
+        existing_vault = None
+        if hasattr(self.pipeline, 'vault') and self.pipeline.vault is not None:
+            existing_vault = self.pipeline.vault
         self.program_loaded = False
         self.pipeline = Simple_Pipeline(trace=False)
+        # restore existing vault onto the new pipeline if we had one
+        if existing_vault is not None:
+            try:
+                self.pipeline.vault = existing_vault
+            except Exception:
+                pass
         self.pipeline.load_program(rev_program)
 
         # Load the signature into pipeline memory at base 0x400 (as reverse_hash.asm expects)
         base = 0x400
-        # write document into memory starting at 0 (so any data remains), not strictly needed by reverse
-        if len(document_data) <= len(self.pipeline.memory):
-            self.pipeline.memory[0:len(document_data)] = document_data
+        # Ensure memory is large enough for base region (we need up to base+72)
+        needed = base + 72
+        if len(self.pipeline.memory) < needed:
+            extra = needed - len(self.pipeline.memory)
+            self.pipeline.memory += bytearray(b'\x00' * extra)
+
+        # Note: don't write document_data at address 0 since program is loaded at 0
+        # and writing the document would overwrite the reverse program. The reverse
+        # program only needs the signature and the key placed at 'base'.
 
         # write signature into memory
         for i in range(4):
             self.pipeline.memory[base + i*8: base + (i+1)*8] = signature[i].to_bytes(8, 'little')
+
+        # If verifying using the vault, ensure the pipeline has a vault instance
+        # and write the vault's key into memory at base+64 (reverse_hash.asm will read it there).
+        if isinstance(key, dict) and key.get('use_vault', False):
+            vault_index = key.get('vault_index', 0)
+            # attach or create vault on pipeline
+            if not hasattr(self.pipeline, 'vault') or self.pipeline.vault is None:
+                v = Vault()
+                self.pipeline.vault = v
+            else:
+                v = self.pipeline.vault
+
+            # Ensure pipeline memory is large enough to hold base+72 (we need up to base+71)
+            needed = base + 72
+            if len(self.pipeline.memory) < needed:
+                # extend memory with zeros
+                extra = needed - len(self.pipeline.memory)
+                self.pipeline.memory += bytearray(b'\x00' * extra)
+
+            # Vault stores keys internally in v.keys; read the key value and write little-endian
+            try:
+                key_val = v.keys[vault_index]
+            except Exception:
+                # If key index invalid, write zeros
+                key_val = 0
+
+            self.pipeline.memory[base + 64: base + 72] = int(key_val & 0xFFFFFFFFFFFFFFFF).to_bytes(8, 'little')
+
+        # Ensure the reverse program sees the expected base register (x20)
+        try:
+            self.pipeline.registers[20] = base
+        except Exception:
+            pass
 
         # Run pipeline until it halts or reaches step limit
         steps = 0
@@ -275,18 +370,33 @@ def main():
     processor = ISAPipelineHashProcessor()
     target_file = "file_loader.py"
     signed_file = f"{target_file}_signed.bin"
+    # For demo purposes: attach a Vault and write a test key so the script
+    # demonstrates signing/verifying using the boveda rather than the hardcoded key.
+    v = Vault()
+    demo_key = 0xFEEDC0FFEE123456
+    v.write_key(0, demo_key)
+    try:
+        processor.pipeline.vault = v
+    except Exception:
+        pass
 
     print("=== FASE 1: CALCULO DE HASH ===")
+    # If target_file does not exist, fall back to a small temp file
+    if not os.path.exists(target_file):
+        with open(target_file, 'wb') as f:
+            f.write(b'demo')
+
     hash_result = processor.calculate_hash_components(target_file)
     print(f"Hash final: 0x{hash_result['final_hash']:016X}")
 
-    print("=== FASE 2: CREAR ARCHIVO FIRMADO ===")
+    print("=== FASE 2: CREAR ARCHIVO FIRMADO (USANDO VAULT) ===")
     signature_info = processor.create_signed_file(target_file, signed_file)
     print(f"Archivo firmado: {signed_file}")
     print(f"Firma: {signature_info['signature']}")
+    print(f"Clave usada (private_key_used): {signature_info['private_key_used']}")
 
-    print("=== FASE 3: VERIFICAR ===")
-    verify_info = processor.verify_signed_file(signed_file)
+    print("=== FASE 3: VERIFICAR (USANDO VAULT) ===")
+    verify_info = processor.verify_signed_file(signed_file, key={'use_vault': True, 'vault_index': 0})
     print(f"Verificación: {'VÁLIDA' if verify_info['valid'] else 'INVÁLIDA'}")
     print(f"Componentes hash: {verify_info['hash_components']}")
 

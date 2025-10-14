@@ -11,8 +11,9 @@ lw x2, 8(x20)          # S1
 lw x3, 16(x20)         # S2
 lw x4, 24(x20)         # S3
 
-# Cargar clave local en x6 (ejemplo: 0x1234)
-addi x6, x0, 0x1234
+# Cargar clave local en x6 desde memoria en base+64 (8 bytes little-endian)
+# reverse_hash.asm espera que el orquestador ponga la key en memoria en base+64
+lw x6, 64(x20)
 
 # Recuperar componentes A..D: A = S0 ^ K, etc.
 xor x10, x1, x6        # A

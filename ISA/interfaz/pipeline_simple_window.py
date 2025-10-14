@@ -317,6 +317,13 @@ class Simple_Pipeline_Window:
         try:
             self.output_text.insert(tk.END, f"\n=== PROCESANDO: {file_path} ===\n")
             processor = ISAPipelineHashProcessor()
+            # If the running pipeline has a vault and the user is superuser, attach
+            # the same vault to the processor so signing/verifying uses the vault keys.
+            if hasattr(self.segmentado, 'vault') and self.segmentado.vault is not None and self.get_superuser_status():
+                try:
+                    processor.pipeline.vault = self.segmentado.vault
+                except Exception:
+                    pass
             data = processor.load_file(file_path)
 
             # Inicializar hash
@@ -351,7 +358,12 @@ class Simple_Pipeline_Window:
             # Crear archivo firmado
             signature_info = processor.create_signed_file(file_path, signed_file, key=key_param)
             signature = signature_info['signature']
-            private_key = signature_info.get('private_key', processor.private_key)
+            # Prefer explicit private_key_used (None means Vault used)
+            private_key_used = signature_info.get('private_key_used', signature_info.get('private_key', None))
+            if private_key_used is None:
+                private_key_text = 'VAULT'
+            else:
+                private_key_text = f"0x{int(private_key_used) :016X}"
 
             self.output_text.insert(tk.END, f"Archivo firmado: {signed_file}\n")
             self.output_text.insert(tk.END, f"Firma: S1=0x{signature[0]:016X}, S2=0x{signature[1]:016X}, S3=0x{signature[2]:016X}, S4=0x{signature[3]:016X}\n")
@@ -372,7 +384,7 @@ class Simple_Pipeline_Window:
                 f"\nTamaño original: {original_size} bytes\n"
                 f"Tamaño archivo firmado: {signed_size} bytes\n"
                 f"Overhead de firma: {overhead} bytes\n"
-                f"Clave usada: 0x{private_key:016X}\n"
+                f"Clave usada: {private_key_text}\n"
             )
             self.output_text.see(tk.END)
 

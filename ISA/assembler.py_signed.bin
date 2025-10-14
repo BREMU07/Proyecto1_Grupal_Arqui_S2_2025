@@ -3,24 +3,24 @@ class Assembler:
     def __init__(self):
         # Opcodes personalizados
         self.opcodes = {
-            'lw': 0xA1,      # Load Word
-            'sw': 0xB2,      # Store Word  
-            'add': 0xC3,     # Addition
-            'sub': 0xC3,     # Subtraction (mismo opcode que add, diferenciado por funct7)
-            'mul': 0xC3,     # Multiplication (mismo opcode que add, diferenciado por funct7)
-            'jal': 0xD4,     # Jump and Link
-            'beq': 0xE5,     # Branch if Equal
-            'and': 0xF6,     # Bitwise AND
-            'or': 0xF6,      # Bitwise OR (mismo opcode que and, diferenciado por funct3)
-            'xor': 0xF7,     # Bitwise XOR (new)
-            'not': 0xF7,     # Bitwise NOT (new, same opcode as xor, differentiated by funct3)
-            'ebreak': 0x88,   # Environment Break
-            'addi': 0xA9,    # Add immediate
-            'rol': 0xAA,     # Rotate left immediate
-            'muli': 0xAB,    # Multiply by immediate (for mul mix step)
-            'modi': 0xAC,     # Modular reduce immediate (for modulo prime)
+            'lw': 0xA1,      # cargar palabra
+            'sw': 0xB2,      # almacenar palabra
+            'add': 0xC3,     # suma
+            'sub': 0xC3,     # resta (mismo opcode que add, diferenciado por funct7)
+            'mul': 0xC3,     # multiplicacion (mismo opcode que add, diferenciado por funct7)
+            'jal': 0xD4,     # jump and link
+            'beq': 0xE5,     # branch si igual
+            'and': 0xF6,     # AND bit a bit
+            'or': 0xF6,      # OR bit a bit (mismo opcode que and, diferenciado por funct3)
+            'xor': 0xF7,     # XOR bit a bit
+            'not': 0xF7,     # NOT bit a bit (unaria, mismo opcode que xor, diferenciado por funct3)
+            'ebreak': 0x88,   # ebreak
+            'addi': 0xA9,    # suma inmediata
+            'rol': 0xAA,     # rotar izquierda inmediata
+            'muli': 0xAB,    # multiplicar por inmediato
+            'modi': 0xAC,     # modulo inmediato
 
-            # --- Instrucciones de bóveda (Vault ISA) ---
+            # --- Instrucciones de boveda (Vault ISA) ---
             'vwr':   0x90,   # Vault Write Register
             'vinit': 0x91,   # Vault Initialize
             'vsign': 0x92    # Vault Sign Block
@@ -39,7 +39,7 @@ class Assembler:
             'or': 0x2,       # OR function
             'xor': 0x3,
             'not': 0x4,
-            'ebreak': 0x7,   # System break function
+            'ebreak': 0x7,   # funcion de break del sistema
             'addi': 0x1,     # Add immediate function
             'rol': 0x3,
             'muli': 0x4,
@@ -72,7 +72,7 @@ class Assembler:
             raise ValueError(f"Register out of range: {reg_str}")
         return idx
 
-    # Encoding helpers para 64 bits - Formato unificado
+    # Helpers de codificacion para 64 bits - Formato unificado
     # [63-56: opcode] [55-51: rd] [50-46: rs1] [45-41: rs2] [40-38: funct3] [37-31: funct7] [30-0: imm/unused]
     
     def encode_r64(self, funct7, rs2, rs1, funct3, rd, opcode):
@@ -107,7 +107,7 @@ class Assembler:
 
             instruction = None
 
-            # R-type instructions
+            # Instrucciones R-type
             if inst in ['add', 'sub', 'mul', 'and', 'or', 'xor', 'not']:
                 if inst == 'not':
                     if len(parts) < 3:
