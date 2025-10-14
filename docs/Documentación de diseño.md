@@ -14,7 +14,8 @@ Un banco amplio de registros reduce la necesidad de acceso a memoria, mejora el 
 - **Inmediato:** Permite usar valores constantes directamente en las instrucciones.
 - **Registro:** Operaciones entre valores almacenados en registros.
 - **Memoria directa:** Acceso a posiciones de memoria especificadas por registros.
-- **Justificación:** Estos modos cubren los casos más comunes en programación y hardware, manteniendo la ISA simple y eficiente.
+  
+Estos modos cubren los casos más comunes en programación y hardware, manteniendo la ISA simple y eficiente.
   
 ## Sintaxis
 Las instrucciones siguen el formato:
@@ -27,6 +28,15 @@ OPCODE rd, rs1, rs2, imm
 - `imm`: Valor inmediato.
 
 Cada instruccione se codifica en 64 bits, con campos para opcode, registros, y valores inmediatos. El ensamblador traduce la sintaxis textual a la codificación binaria adecuada. Esto simplifica el hardware y el software de decodificación, reduce la complejidad y el área de lógica de control.
+
+## Tipos de instrucciones
+
+- Aritméticas y lógicas: ADD, SUB, AND, OR, XOR, etc.
+- Transferencia: LOAD, STORE para mover datos entre memoria y registros.
+- Control: JUMP, BRANCH para modificar el flujo de ejecución.
+- Especiales de bóveda: `vwr` (escribir clave), `vinit` (inicializar hash), `vsign` (firmar bloque).
+
+Se incluyen instrucciones esenciales para la computación general y operaciones especializadas para seguridad, manteniendo la ISA compacta y funcional.
 
 # Modelado del software 
 
