@@ -29,7 +29,7 @@ OPCODE rd, rs1, rs2, imm
 
 Cada instruccion se codifica en 64 bits, con campos para opcode, registros, y valores inmediatos. El ensamblador traduce la sintaxis textual a la codificación binaria adecuada. Esto simplifica el hardware y el software de decodificación, reduce la complejidad y el área de lógica de control.
 
-## Formato de Instrucciones (64 bits)
+### Formato de Instrucciones (64 bits)
 
 ```
 Tipo R: [funct7:7][rs2:5][rs1:5][funct3:3][rd:5][opcode:7][reserved:32]
