@@ -104,11 +104,11 @@ Se incluyen instrucciones esenciales para la computación general y operaciones 
 
 
 ### Pipeline: qué hace cada etapa (muy breve)
-**IF**: lee 8 bytes de instrucción desde Instr Mem[PC], guarda instr y pc en IF_ID; PC += 8. NOP (0x0) marca fin.
-**ID**: decodifica campos (opcode, rd, rs1, rs2, funct3, funct7, imm), lee registers[rs1] y registers[rs2], genera señales de control y llena ID_EX.
-**EX**: ejecuta ALU / calcula dirección, decide branches/jumps (si se toma una rama actualiza PC y hace flush invalidando IF_ID), escribe alu_result en EX_MEM.
-**MEM**: realiza loads/stores (8 bytes), o invoca acciones de la bóveda (vsign lee bloques y escribe la firma); resultados y flags van a MEM_WB.
-**WB**: si reg_write y rd != 0 escribe registers[rd] con mem_to_reg ? mem_data : alu_result
+- **IF**: lee 8 bytes de instrucción desde Instr Mem[PC], guarda instr y pc en IF_ID; PC += 8. NOP (0x0) marca fin.
+- **ID**: decodifica campos (opcode, rd, rs1, rs2, funct3, funct7, imm), lee registers[rs1] y registers[rs2], genera señales de control y llena ID_EX.
+- **EX**: ejecuta ALU / calcula dirección, decide branches/jumps (si se toma una rama actualiza PC y hace flush invalidando IF_ID), escribe alu_result en EX_MEM.
+- **MEM**: realiza loads/stores (8 bytes), o invoca acciones de la bóveda (vsign lee bloques y escribe la firma); resultados y flags van a MEM_WB.
+- **WB**: si reg_write y rd != 0 escribe registers[rd] con mem_to_reg ? mem_data : alu_result
 
 ### Integración del cálculo de hash
 
