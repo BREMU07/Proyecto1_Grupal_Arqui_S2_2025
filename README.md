@@ -237,32 +237,6 @@ python main.py
 # En Pipeline Window: Verificar Boveda -> Seleccionar archivo .bin firmado
 ```
 
-## Estructura del ISA
-
-
-### Conjunto de Instrucciones Soportadas
-
-**Aritmeticas:**
-- ADD, SUB, MUL, DIV, MOD
-- ADDI, SUBI, MULI, DIVI, MODI
-
-**Logicas:**
-- AND, OR, XOR, NOT
-- ANDI, ORI, XORI
-
-**Memoria:**
-- LW, SW (Load/Store Word)
-
-**Control de Flujo:**
-- BEQ, BNE, BLT, BGE (Branches)
-- JAL, JALR (Jumps)
-
-**Boveda (Especiales):**
-- VWR (Vault Write)
-- VINIT (Vault Initialize)  
-- VSIGN (Vault Sign)
-
-
 ## Notas de Implementacion
 
 - El pipeline implementa deteccion y manejo de riesgos de datos
