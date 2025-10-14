@@ -31,7 +31,7 @@ ISA/
 │   └── pipeline_simple_window.py  # Interfaz del simulador de pipeline
 ├── program.asm                # Programa de ejemplo en assembly
 ├── vault_test.asm            # Programa de prueba para boveda
-└── proceso_inverso_boveda.asm # Programa de proceso inverso para verificacion
+└── reverse_hash.asm # Programa de proceso inverso para verificacion
 
 ```
 
