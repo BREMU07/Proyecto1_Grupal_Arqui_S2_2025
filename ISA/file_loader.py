@@ -9,7 +9,7 @@ class FileLoader:
         
         Args:
             memory: Referencia a la memoria del pipeline (bytearray)
-            base_address: Dirección base donde comenzar a cargar archivos
+            base_address: Direccion base donde comenzar a cargar archivos
         """
         self.memory = memory
         self.base_address = base_address
@@ -21,10 +21,10 @@ class FileLoader:
         
         Args:
             file_path: Ruta al archivo a cargar
-            target_address: Dirección específica donde cargar (opcional)
+            target_address: Direccion especifica donde cargar (opcional)
             
         Returns:
-            tuple: (dirección_inicio, tamaño_bytes)
+            tuple: (direccion_inicio, tamano_bytes)
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
@@ -54,15 +54,15 @@ class FileLoader:
     
     def load_file_in_blocks(self, file_path, block_size=64, target_address=None):
         """
-        Carga un archivo en bloques de tamaño específico (para procesamiento por bloques)
+        Carga un archivo en bloques de tamaño especifico (para procesamiento por bloques)
         
         Args:
             file_path: Ruta al archivo a cargar
-            block_size: Tamaño de cada bloque en bytes (default 64 bits = 8 bytes)
-            target_address: Dirección específica donde cargar (opcional)
+            block_size: Tamano de cada bloque en bytes (default 64 bits = 8 bytes)
+            target_address: Direccion especifica donde cargar (opcional)
             
         Returns:
-            tuple: (dirección_inicio, número_bloques, tamaño_bytes)
+            tuple: (direccion_inicio, numero_bloques, tamano_bytes)
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
@@ -115,7 +115,7 @@ class FileLoader:
         Guarda contenido de memoria a un archivo
         
         Args:
-            start_address: Dirección inicial en memoria
+            start_address: Direccion inicial en memoria
             size: Cantidad de bytes a guardar
             output_path: Ruta del archivo de salida
         """
@@ -129,10 +129,10 @@ class FileLoader:
             
     def get_file_info(self, file_path):
         """
-        Obtiene información sobre un archivo sin cargarlo
+        Obtiene informacion sobre un archivo sin cargarlo
         
         Returns:
-            dict: Información del archivo (tamaño, bloques necesarios, etc.)
+            dict: Informacion del archivo (tamano, bloques necesarios, etc.)
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
@@ -148,7 +148,7 @@ class FileLoader:
         }
     
     def reset_memory_pointer(self):
-        """Reinicia el puntero de memoria a la dirección base"""
+        """Reinicia el puntero de memoria a la direccion base"""
         self.current_address = self.base_address
         
     def clear_memory_range(self, start_address, size):
@@ -156,8 +156,8 @@ class FileLoader:
         Limpia un rango de memoria (establece a 0)
         
         Args:
-            start_address: Dirección inicial
-            size: Número de bytes a limpiar
+            start_address: Direccion inicial
+            size: Numero de bytes a limpiar
         """
         if start_address + size > len(self.memory):
             raise ValueError("Rango de memoria inválido")

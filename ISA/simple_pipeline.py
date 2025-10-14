@@ -1,4 +1,5 @@
-# simple_pipeline.py
+from vault import Vault
+
 class PipelinedRegister:
     def __init__(self):
         self.instruction = 0
@@ -31,6 +32,12 @@ class Simple_Pipeline:
         # ToyMDMA constants
         self.GOLDEN = 0x9e3779b97f4a7c15
         self.PRIME = 0xFFFFFFFB
+
+        # Bóveda segura
+        self.vault = Vault()
+        # Estado de la bóveda (Vault)
+        self.vault_keys = [0] * 4
+        self.vault_inits = [0] * 4
 
     def load_program(self, program):
         for i, instr in enumerate(program):
@@ -98,6 +105,11 @@ class Simple_Pipeline:
             return
 
         op = self.ID_EX.opcode
+        # Validar acceso a registros para evitar index out of range
+        if self.ID_EX.rs1 >= len(self.registers):
+            self.ID_EX.rs1 = 0
+        if self.ID_EX.rs2 >= len(self.registers):
+            self.ID_EX.rs2 = 0
         rs1_val = self.registers[self.ID_EX.rs1]
         rs2_val = self.registers[self.ID_EX.rs2]
 
@@ -138,6 +150,9 @@ class Simple_Pipeline:
         # I-type lw con nuevo opcode
         elif op == 0xA1:  # lw
             alu_result = rs1_val + self.ID_EX.imm
+        elif op == 0xB2:  # sw
+            # calcular direccion de memoria en ALU
+            alu_result = rs1_val + self.ID_EX.imm
         # I-type addi (add immediate)
         elif op == 0xA9:  # addi rd, rs1, imm
             alu_result = (rs1_val + self.ID_EX.imm) & 0xFFFFFFFFFFFFFFFF
@@ -162,6 +177,24 @@ class Simple_Pipeline:
             # ALU result not used for branch instructions
             alu_result = 0
 
+        # Instrucciones especiales de bóveda (Vault)
+        elif op == 0x90:  # vwr rd, imm  -> escribe llave privada
+            index = self.ID_EX.rd & 0x3     # índice de 0–3
+            value = self.ID_EX.imm & 0xFFFFFFFFFFFFFFFF
+            self.vault.write_key(index, value)
+            alu_result = 0  # sin retorno
+
+        elif op == 0x91:  # vinit rd, imm -> inicializa valor de hash
+            index = self.ID_EX.rd & 0x3
+            value = self.ID_EX.imm & 0xFFFFFFFFFFFFFFFF
+            self.vault.write_init(index, value)
+            alu_result = 0
+
+        elif op == 0x92:  # vsign rd, rs1, rs2
+            # Debug: show value of address register before signature
+            print(f"[DEBUG EX_stage vsign] rs2 (x{self.ID_EX.rs2}) value: 0x{self.registers[self.ID_EX.rs2]:X}")
+            alu_result = self.registers[self.ID_EX.rs2]
+
         # ensure 64-bit wraparound for any result
         alu_result &= 0xFFFFFFFFFFFFFFFF
 
@@ -177,7 +210,9 @@ class Simple_Pipeline:
         self.EX_MEM.alu_result = alu_result
         self.EX_MEM.rd = self.ID_EX.rd
         self.EX_MEM.opcode = self.ID_EX.opcode
+        self.EX_MEM.rs1 = self.ID_EX.rs1
         self.EX_MEM.rs2 = self.ID_EX.rs2
+        self.EX_MEM.imm = self.ID_EX.imm
         self.EX_MEM.valid = True
         self.EX_MEM.stage = "EX"
         self.ID_EX.valid = False
@@ -189,7 +224,54 @@ class Simple_Pipeline:
         op = self.EX_MEM.opcode
         if op == 0xA1:  # lw con nuevo opcode personalizado
             addr = self.EX_MEM.alu_result
-            self.MEM_WB.alu_result = int.from_bytes(self.memory[addr:addr+8], 'little')
+            # Validar acceso a memoria
+            if 0 <= addr and addr + 8 <= len(self.memory):
+                self.MEM_WB.alu_result = int.from_bytes(self.memory[addr:addr+8], 'little')
+            else:
+                print(f"[ERROR MEM] lw: direccion fuera de rango addr=0x{addr:X}")
+                self.MEM_WB.alu_result = 0
+        elif op == 0xB2:  # sw con nuevo opcode personalizado
+            addr = self.EX_MEM.alu_result
+            if 0 <= addr and addr + 8 <= len(self.memory) and self.EX_MEM.rs2 < len(self.registers):
+                data = self.registers[self.EX_MEM.rs2]
+                self.memory[addr:addr+8] = data.to_bytes(8, 'little')
+            else:
+                print(f"[ERROR MEM] sw: direccion o registro fuera de rango addr=0x{addr:X} rs2={self.EX_MEM.rs2}")
+            self.MEM_WB.alu_result = 0
+
+        # Instrucciones de bóveda
+        elif op == 0x90:  # vwr rd, imm
+            key_index = self.EX_MEM.rd & 0x3
+            value = self.EX_MEM.imm
+            self.vault.write_key(key_index, value)
+            self.MEM_WB.alu_result = 0
+        elif op == 0x91:  # vinit rd, imm
+            key_index = self.EX_MEM.rd & 0x3
+            value = self.EX_MEM.imm
+            self.vault.write_init(key_index, value)
+            self.MEM_WB.alu_result = 0
+        elif op == 0x92:  # vsign idx, addr
+            addr = self.EX_MEM.alu_result
+            key_idx = self.EX_MEM.rs1
+            # Validar rango de memoria e indice de clave
+            if not (0 <= addr and addr + 32 <= len(self.memory)):
+                print(f"[ERROR vsign] memoria fuera de rango addr=0x{addr:X}")
+                self.MEM_WB.alu_result = 0
+            elif not hasattr(self.vault, 'keys') or key_idx >= len(self.vault.keys):
+                print(f"[ERROR vsign] clave fuera de rango key_idx={key_idx}")
+                self.MEM_WB.alu_result = 0
+            else:
+                blocks = [int.from_bytes(self.memory[addr + i*8: addr + (i+1)*8], 'little') for i in range(4)]
+                print(f"[DEBUG vsign] addr: 0x{addr:X}")
+                print(f"[DEBUG vsign] blocks: {[hex(b) for b in blocks]}")
+                S = self.vault.sign_block(key_idx, blocks)
+                print(f"[DEBUG vsign] signature: {[hex(s) for s in S]}")
+                for i, val in enumerate(S):
+                    pos = addr + 4*8 + i*8
+                    if 0 <= pos and pos + 8 <= len(self.memory):
+                        self.memory[pos:pos+8] = val.to_bytes(8, 'little')
+                self.MEM_WB.alu_result = 1
+
         else:  # R-type (opcodes 0xC3 y 0xF6)
             self.MEM_WB.alu_result = self.EX_MEM.alu_result
 
