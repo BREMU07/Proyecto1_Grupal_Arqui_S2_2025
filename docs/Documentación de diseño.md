@@ -85,6 +85,17 @@ Se incluyen instrucciones esenciales para la computación general y operaciones 
 
 ---
 
+# Organización/Microarquitectura
+
+## Diagrama de bloques general del sistema
+
+<img width="969" height="409" alt="image" src="https://github.com/user-attachments/assets/ddeb0bbf-318b-4815-a4ce-27c0db8cfe6a" />
+
+## Diagrama de microarquitectura del procesador
+
+<img width="1121" height="597" alt="image" src="https://github.com/user-attachments/assets/f5950dc9-43ae-432d-8ac6-0bc80556b835" />
+
+
 # Modelado del software 
 
 Este proyecto implementa una arquitectura **RISC segmentada (pipeline)** con extensiones **criptográficas seguras**, simulada completamente en **Python**.
@@ -127,8 +138,6 @@ El modelo integra:
 > La función `step()` ejecuta una iteración completa del pipeline, propagando los valores entre registros segmentados.
 
 ---
-
-
 
 ## Bóveda segura (Vault)
 
