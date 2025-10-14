@@ -1,4 +1,25 @@
-# Modelado del software
+# Arquitectura del set de instrucciones
+
+## Tipos y tamaños de datos
+**Datos soportados:** El procesador opera principalmente con enteros de 64 bits, tanto en registros como en memoria. El uso de 64 bits permite operaciones eficientes sobre grandes cantidades de datos y es adecuado para aplicaciones modernas, como criptografía y procesamiento de archivos.
+
+## Registros disponibles 
+**Banco de registros:** 32 registros generales(x0-x31), cada uno de 64 bits.
+- x0: Registro constante con valor cero (no modificable).
+- x1 a x31: Registros de propósito general para operaciones aritméticas, lógicas, direcciones y almacenamiento temporal.
+
+Un banco amplio de registros reduce la necesidad de acceso a memoria, mejora el rendimiento y simplifica la gestión de variables temporales.
+
+## Modos de direccionamiento
+- **Inmediato:** Permite usar valores constantes directamente en las instrucciones.
+- **Registro:** Operaciones entre valores almacenados en registros.
+- **Memoria directa:** Acceso a posiciones de memoria especificadas por registros.
+- **Justificación:** Estos modos cubren los casos más comunes en programación y hardware, manteniendo la ISA simple y eficiente.
+  
+## Sintaxis
+Las instrucciones siguen el formato
+
+# Modelado del software 
 
 Este proyecto implementa una arquitectura **RISC segmentada (pipeline)** con extensiones **criptográficas seguras**, simulada completamente en **Python**.
 
