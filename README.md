@@ -269,19 +269,6 @@ Tipo I: [imm:12][rs1:5][funct3:3][rd:5][opcode:7][reserved:32]
 - VSIGN (Vault Sign)
 
 
-### Diagrama de bloques general del sistema
-
-<img width="969" height="409" alt="image" src="https://github.com/user-attachments/assets/ddeb0bbf-318b-4815-a4ce-27c0db8cfe6a" />
-
-
-### Diagrama de microarquitectura del procesador
-
-<img width="1121" height="597" alt="image" src="https://github.com/user-attachments/assets/f5950dc9-43ae-432d-8ac6-0bc80556b835" />
-
-
-
-
-
 ## Notas de Implementacion
 
 - El pipeline implementa deteccion y manejo de riesgos de datos
