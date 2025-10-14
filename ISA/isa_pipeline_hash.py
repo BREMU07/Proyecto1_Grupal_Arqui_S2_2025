@@ -5,37 +5,11 @@ from simple_pipeline import Simple_Pipeline
 import time
 
 class ISAPipelineHashProcessor:
-    def __init__(self, vault=None):
+    def __init__(self):
         self.assembler = Assembler()
-<<<<<<< Updated upstream
         # Clave privada para firma (por ahora hardcodeada)
         self.private_key = 0x123456789ABCDEF0
     
-=======
-        
-        # Usar la bóveda existente o crear una nueva
-        if vault is None:
-            self.vault = Vault()
-            # Configurar clave por defecto en la bóveda (índice 0)
-            self.vault.write_key(0, 0x123456789ABCDEF0)
-        else:
-            self.vault = vault
-        
-        self.key_index = 0  # Índice de la clave a usar por defecto
-        self.pipeline = Simple_Pipeline(trace=False)
-        self.program_loaded = False
-    
-    def set_key_index(self, index):
-        """
-        Cambiar el índice de la clave de bóveda a usar
-        """
-        if 0 <= index < len(self.vault.keys):
-            self.key_index = index
-            return True
-        return False
-
-    # --- ARCHIVOS ---
->>>>>>> Stashed changes
     def load_file(self, file_path):
         """Cargar archivo como bytes"""
         with open(file_path, 'rb') as f:
@@ -47,7 +21,6 @@ class ISAPipelineHashProcessor:
         S = (A XOR K, B XOR K, C XOR K, D XOR K)
         """
         if key is None:
-<<<<<<< Updated upstream
             key = self.private_key
         
         signature = (
@@ -59,17 +32,11 @@ class ISAPipelineHashProcessor:
         
         return signature
     
-=======
-            key = self.vault.keys[self.key_index]
-        return (A ^ key, B ^ key, C ^ key, D ^ key)
-
->>>>>>> Stashed changes
     def verify_signature(self, signature, A, B, C, D, key=None):
         """
         Verificar la firma aplicando XOR nuevamente para recuperar el hash original
         """
         if key is None:
-<<<<<<< Updated upstream
             key = self.private_key
         
         # Recuperar hash original: Hash = Signature XOR K
@@ -82,15 +49,6 @@ class ISAPipelineHashProcessor:
         return (recovered_A == A and recovered_B == B and 
                 recovered_C == C and recovered_D == D)
     
-=======
-            key = self.vault.keys[self.key_index]
-        return (signature[0] ^ key == A and
-                signature[1] ^ key == B and
-                signature[2] ^ key == C and
-                signature[3] ^ key == D)
-
-    # --- CREAR ARCHIVO FIRMADO ---
->>>>>>> Stashed changes
     def create_signed_file(self, original_file, signed_file, key=None):
         """
         Crear archivo firmado que contiene el documento original + firma

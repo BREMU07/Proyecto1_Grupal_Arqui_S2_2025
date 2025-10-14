@@ -130,20 +130,7 @@ class Assembler:
                     raise ValueError(f"[line {lineno}] Invalid lw offset: {offset_str}")
                 instruction = self.encode_i64(offset, rs1, self.funct3['lw'], rd, self.opcodes['lw'])
 
-<<<<<<< Updated upstream
             # I-type immediate instructions: addi, rol, muli, modi
-=======
-            elif inst == 'sw':
-                rs2 = self.parse_register(parts[1])  # Source register (data to store)
-                offset_str, rs1_str = parts[2].split('(')
-                rs1 = self.parse_register(rs1_str[:-1])  # Base register
-                try:
-                    offset = int(offset_str, 0)
-                except ValueError:
-                    raise ValueError(f"[line {lineno}] Invalid sw offset: {offset_str}")
-                instruction = self.encode_i64(offset, rs1, self.funct3['sw'], rs2, self.opcodes['sw'])
-
->>>>>>> Stashed changes
             elif inst in ['addi', 'rol', 'muli', 'modi']:
                 # syntax: addi rd, rs1, imm
                 if len(parts) < 4:
@@ -189,38 +176,6 @@ class Assembler:
                 # Store imm in bits [30-0], use rd=0 for branch instructions
                 instruction = self.encode_r64(0, rs2, rs1, f3, 0, opcode) | (imm & 0x7FFFFFFF)
 
-<<<<<<< Updated upstream
-=======
-            elif inst in ['vwr', 'vinit']:
-                if len(parts) < 3:
-                    raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
-                rd = self.parse_register(parts[1])
-                try:
-                    imm = int(parts[2], 0)
-                except ValueError:
-                    raise ValueError(f"[line {lineno}] Invalid immediate value: {parts[2]}")
-                f3 = self.funct3.get(inst, 0)
-                opcode = self.opcodes.get(inst)
-                instruction = self.encode_i64(imm, 0, f3, rd, opcode)
-
-            elif inst == 'vsign':
-                if len(parts) < 4:
-                    raise ValueError(f"[line {lineno}] Instruction {inst} missing operands.")
-                rd = self.parse_register(parts[1])
-                rs1 = self.parse_register(parts[2])
-                rs2 = self.parse_register(parts[3])
-                f7 = self.funct7.get(inst, 0)
-                f3 = self.funct3.get(inst, 0)
-                opcode = self.opcodes.get(inst)
-                instruction = self.encode_r64(f7, rs2, rs1, f3, rd, opcode)
-
-            elif inst == 'ebreak':
-                # EBREAK instruction - Environment Break (no operands)
-                f3 = self.funct3.get(inst, 0)
-                opcode = self.opcodes.get(inst)
-                instruction = self.encode_i64(0, 0, f3, 0, opcode)
-
->>>>>>> Stashed changes
             else:
                 raise ValueError(f"[line {lineno}] Unknown instruction: {inst}")
 
