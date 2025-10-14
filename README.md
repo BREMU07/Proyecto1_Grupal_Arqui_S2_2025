@@ -1,6 +1,9 @@
 # Proyecto1_Grupal_Arqui_S2_2025
 
-## Descripcion
+## Propósito del proyecto
+Este proyecto tiene como objetivo enseñar al grupo cómo aplicar los conceptos de arquitectura de computadores en el diseño, su posterior implementación en un modelo de software, de una arquitectura del set de instrucciones (ISA) tipo RISC específica y propia de nuestro grupo de trabajo para un conjunto de aplicaciones relacionadas con la seguridad de la información, específicamente en el dominio de la firma digital y verificación de integridad de datos.
+
+## Descripción
 
 Modelo funcional de software de un CPU con arquitectura de conjunto de instrucciones (ISA) personalizada. Incluye simulacion de pipeline segmentado, sistema de boveda segura para almacenamiento de claves, y algoritmo de hash ToyMDMA con capacidades de firmado digital.
 
