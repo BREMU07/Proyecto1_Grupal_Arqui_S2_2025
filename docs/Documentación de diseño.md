@@ -103,6 +103,26 @@ Se incluyen instrucciones esenciales para la computación general y operaciones 
 <img width="1121" height="597" alt="image" src="https://github.com/user-attachments/assets/f5950dc9-43ae-432d-8ac6-0bc80556b835" />
 
 
+### Pipeline: qué hace cada etapa (muy breve)
+**IF**: lee 8 bytes de instrucción desde Instr Mem[PC], guarda instr y pc en IF_ID; PC += 8. NOP (0x0) marca fin.
+**ID**: decodifica campos (opcode, rd, rs1, rs2, funct3, funct7, imm), lee registers[rs1] y registers[rs2], genera señales de control y llena ID_EX.
+**EX**: ejecuta ALU / calcula dirección, decide branches/jumps (si se toma una rama actualiza PC y hace flush invalidando IF_ID), escribe alu_result en EX_MEM.
+**MEM**: realiza loads/stores (8 bytes), o invoca acciones de la bóveda (vsign lee bloques y escribe la firma); resultados y flags van a MEM_WB.
+**WB**: si reg_write y rd != 0 escribe registers[rd] con mem_to_reg ? mem_data : alu_result
+
+### Integración del cálculo de hash
+
+- El controlador (software) carga el programa ToyMDMA en memoria del procesador y pone registros: registers[1]=data_block, registers[2..5]=A..D.
+- Se ejecuta el pipeline hasta que el programa termina (NOP final); luego se leen registers[2..5] para obtener A,B,C,D actualizados.
+- Por bloque de 8 bytes se repite y al final se calcula final_hash = A ^ B ^ C ^ D.
+
+### Bóveda en el pipeline
+
+- EX prepara parámetros (dirección en alu_result, índice de clave en rd/rsX).
+- MEM valida rango, lee los 4 bloques (4×8B = 32 B) desde memory[addr..addr+31], llama vault.sign_block(key_idx, blocks).
+- MEM escribe la firma resultante (4×8B) en memoria justo después del mensaje (pos = addr + 32, etc.).
+
+
 # Modelado del software 
 
 Este proyecto implementa una arquitectura **RISC segmentada (pipeline)** con extensiones **criptográficas seguras**, simulada completamente en **Python**.
