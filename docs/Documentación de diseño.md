@@ -38,49 +38,6 @@ Cada instruccione se codifica en 64 bits, con campos para opcode, registros, y v
 
 Se incluyen instrucciones esenciales para la computación general y operaciones especializadas para seguridad, manteniendo la ISA compacta y funcional.
 
-# Modelado del software 
-
-Este proyecto implementa una arquitectura **RISC segmentada (pipeline)** con extensiones **criptográficas seguras**, simulada completamente en **Python**.
-
-El sistema incluye un módulo de **bóveda (Vault)** que almacena llaves privadas y realiza el **firmado digital** de bloques de datos mediante una función hash personalizada denominada **ToyMDMA**.
-
-## Componentes principales
-
-El modelo integra:
-
-- Un **simulador de pipeline** de 5 etapas (IF, ID, EX, MEM, WB)  
-- Un **conjunto de instrucciones extendido** (ISA personalizada)  
-- Una **bóveda segura (Vault)** para operaciones de clave y firma  
-- Una **interfaz gráfica (Tkinter)** para simular la ejecución paso a paso  
-- Un **script de pruebas automáticas** (`vault_test_runner.py`) para validación de la firma
-
----
-
-## Banco de registros y memoria
-
-| Recurso | Descripción |
-|---------|-------------|
-| **32 registros (x0–x31)** | Registros de propósito general (`x0` es siempre cero) |
-| **Memoria principal** | 1024 bytes direccionados por bytes |
-| **Codificación de instrucción** | 64 bits: `[63-56] opcode`, `[55-51] rd`, `[50-46] rs1`, `[45-41] rs2`, `[40-38] funct3`, `[37-31] funct7`, `[30-0] imm` |
-| **Endianness** | *Little-endian* para almacenamiento en memoria |
-
----
-
-## Flujo de pipeline (5 etapas)
-
-| Etapa | Función | Estructura usada |
-|-------|---------|------------------|
-| **IF (Instruction Fetch)** | Obtiene la instrucción desde memoria | `IF_ID` |
-| **ID (Instruction Decode)** | Decodifica `opcode`, registros e inmediato | `ID_EX` |
-| **EX (Execute)** | Realiza operación aritmética o controla flujo | `EX_MEM` |
-| **MEM (Memory Access)** | Accede a memoria o bóveda | `MEM_WB` |
-| **WB (Write Back)** | Escribe el resultado en el registro destino | `MEM_WB` |
-
-> La función `step()` ejecuta una iteración completa del pipeline, propagando los valores entre registros segmentados.
-
----
-
 ## Conjunto de instrucciones (ISA extendida)
 
 ### Instrucciones aritméticas
@@ -126,6 +83,51 @@ El modelo integra:
 | `vsign rs1, rs2` | Firma bloque de memoria | `0x92` |
 
 ---
+
+# Modelado del software 
+
+Este proyecto implementa una arquitectura **RISC segmentada (pipeline)** con extensiones **criptográficas seguras**, simulada completamente en **Python**.
+
+El sistema incluye un módulo de **bóveda (Vault)** que almacena llaves privadas y realiza el **firmado digital** de bloques de datos mediante una función hash personalizada denominada **ToyMDMA**.
+
+## Componentes principales
+
+El modelo integra:
+
+- Un **simulador de pipeline** de 5 etapas (IF, ID, EX, MEM, WB)  
+- Un **conjunto de instrucciones extendido** (ISA personalizada)  
+- Una **bóveda segura (Vault)** para operaciones de clave y firma  
+- Una **interfaz gráfica (Tkinter)** para simular la ejecución paso a paso  
+- Un **script de pruebas automáticas** (`vault_test_runner.py`) para validación de la firma
+
+---
+
+## Banco de registros y memoria
+
+| Recurso | Descripción |
+|---------|-------------|
+| **32 registros (x0–x31)** | Registros de propósito general (`x0` es siempre cero) |
+| **Memoria principal** | 1024 bytes direccionados por bytes |
+| **Codificación de instrucción** | 64 bits: `[63-56] opcode`, `[55-51] rd`, `[50-46] rs1`, `[45-41] rs2`, `[40-38] funct3`, `[37-31] funct7`, `[30-0] imm` |
+| **Endianness** | *Little-endian* para almacenamiento en memoria |
+
+---
+
+## Flujo de pipeline (5 etapas)
+
+| Etapa | Función | Estructura usada |
+|-------|---------|------------------|
+| **IF (Instruction Fetch)** | Obtiene la instrucción desde memoria | `IF_ID` |
+| **ID (Instruction Decode)** | Decodifica `opcode`, registros e inmediato | `ID_EX` |
+| **EX (Execute)** | Realiza operación aritmética o controla flujo | `EX_MEM` |
+| **MEM (Memory Access)** | Accede a memoria o bóveda | `MEM_WB` |
+| **WB (Write Back)** | Escribe el resultado en el registro destino | `MEM_WB` |
+
+> La función `step()` ejecuta una iteración completa del pipeline, propagando los valores entre registros segmentados.
+
+---
+
+
 
 ## Bóveda segura (Vault)
 
