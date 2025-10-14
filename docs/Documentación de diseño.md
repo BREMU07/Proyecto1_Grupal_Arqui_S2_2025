@@ -5,8 +5,8 @@
 
 ## Registros disponibles 
 **Banco de registros:** 32 registros generales(`x0-x31`), cada uno de 64 bits.
-- (`x0`): Registro constante con valor cero (no modificable).
-- (`x1`) a (`x31`): Registros de propósito general para operaciones aritméticas, lógicas, direcciones y almacenamiento temporal.
+- `x0`: Registro constante con valor cero (no modificable).
+- `x1` a `x31`: Registros de propósito general para operaciones aritméticas, lógicas, direcciones y almacenamiento temporal.
 
 Un banco amplio de registros reduce la necesidad de acceso a memoria, mejora el rendimiento y simplifica la gestión de variables temporales.
 
@@ -17,7 +17,16 @@ Un banco amplio de registros reduce la necesidad de acceso a memoria, mejora el 
 - **Justificación:** Estos modos cubren los casos más comunes en programación y hardware, manteniendo la ISA simple y eficiente.
   
 ## Sintaxis
-Las instrucciones siguen el formato
+Las instrucciones siguen el formato:
+```python
+OPCODE rd, rs1, rs2, imm
+```
+- `OPCODE`: Código de operación (ej. ADD, SUB, VWR, VSIGN).
+- `rd`: Registro destino.
+- `rs1`, `rs2`: Registros fuente.
+- `imm`: Valor inmediato.
+
+Cada instruccione se codifica en 64 bits, con campos para opcode, registros, y valores inmediatos. El ensamblador traduce la sintaxis textual a la codificación binaria adecuada. Esto simplifica el hardware y el software de decodificación, reduce la complejidad y el área de lógica de control.
 
 # Modelado del software 
 
